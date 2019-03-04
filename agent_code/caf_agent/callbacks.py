@@ -56,6 +56,31 @@ def look_for_targets(free_space, start, targets, logger=None):
         if parent_dict[current] == start: return current
         current = parent_dict[current]
 
+def pick_random (x, y, arena):
+    # Init the valid directions
+    directions = [(x,y-1), (x,y+1), (x-1,y), (x+1,y), (x,y)]
+    # Check which moves make sense at all
+    valid_tiles, valid_actions = [],[]
+    # Go over all the possible directions
+    for d in directions:
+        if (arena[d] == 0):
+            valid_tiles.append(d) 
+        # Save the valid actions to be chosen
+        if (x,y-1) in valid_tiles: valid_actions.append((0,'UP'))
+            
+        if (x,y+1) in valid_tiles: valid_actions.append((1,'DOWN'))
+            
+        if (x-1,y) in valid_tiles: valid_actions.append((2,'LEFT'))
+            
+        if (x+1,y) in valid_tiles: valid_actions.append((3,'RIGHT'))
+            
+        if (x,y)in valid_tiles: valid_actions.append((4,'WAIT'))
+
+    # Get a random action from the valid actions
+    shuffle(valid_actions)
+    idx_rand = np.random.randint(len(valid_actions))
+    idx_a, a_new = valid_actions[idx_rand]
+    return (a_new, idx_a)
 
 def setup(self):
     """Called once before a set of games to initialize data structures etc.
@@ -98,6 +123,9 @@ def setup(self):
     # Since the default action is 'WAIT', the default of idx_action is 4
     self.idx_action = 4
     
+    # Queue (state, action)'s that lead to a goal
+    self.list_nsa = []
+    
     # Counters
     self.random = 0
 
@@ -137,27 +165,24 @@ def act(self):
     R = np.zeros((s.cols, s.rows, 2, 6))
     R.fill(-1)
     self.logger.debug(f'Shape of R: {R.shape}')
-    
-    # (state, action) which leads to an empty tile from an empty tile
-    for x0 in range(1,16):
-        for y0 in range(1,16):
-            directions = [(x0,y0-1), (x0,y0+1), (x0-1,y0), (x0+1,y0), (x0,y0)]
-            for i in range(0,len(directions)):
-                d = directions[i]
-                # i is the action taken 
-                if (arena [(x0,y0)]==0 and arena[d] == 0):
-                    R[x0,y0,0,i] = 0
                 
     # (state, action) which leads to get a coin
     for (x0,y0) in coins:
-        directions = [(x0,y0+1), (x0,y0-1), (x0+1,y0), (x0-1,y0)]
-        for i in range(0,len(directions)):
-            d = directions[i]
-            if (arena[d] == 0):
+        queue  = deque([(x0,y0)])
+        reward = 500
+        while (len(queue)>0):
+            curr_x, curr_y = queue.popleft()
+            directions = [(curr_x, curr_y+1), (curr_x, curr_y-1), (curr_x+1, curr_y), (curr_x-1, curr_y)]
+            for i in range(0,len(directions)):
+                d = directions[i]
                 x1, y1 = d
-                R[x1,y1,0,i] = 100
-                
-    #self.logger.debug(f'COINS:\n {coins}')
+                if (arena[d] == 0 and reward > R[x1,y1,0,i]):
+                    R[x1,y1,0,i] = reward
+                    queue.append(d)
+            # Reward decreases as the distance from the coin is larger
+            reward = reward - 1
+                 
+    self.logger.debug(f'COINS:\n {coins}')
     #self.logger.debug(f'ARENA:\n {arena}')
     #self.logger.debug(f'R UP:\n {R[:,:,0,0]}')
     #self.logger.debug(f'R DOWN:\n {R[:,:,0,1]}')
@@ -165,6 +190,10 @@ def act(self):
     #self.logger.debug(f'R RIGHT:\n {R[:,:,0,3]}')
     
     self.R = R
+    
+    # This case is exactly when we know the env perfectly
+    self.Q = self.R
+    
     next_state_actions = []
     
     #At the moment just take into account 5 actions
@@ -181,8 +210,8 @@ def act(self):
     self.logger.debug(f'list_Qvalues: {list_nsa_Qvalues}')
     
     
-    #Get the first value to see if all values are less or equal than zero
     length_Qvalues = len(list_nsa_Qvalues)
+    #Get the first value to see if all values are less or equal than zero
     first_value, _  = list_nsa_Qvalues[0]
     
     self.logger.debug(f'first_value: {first_value}')
@@ -193,39 +222,8 @@ def act(self):
     # first_value <= 0 implies that all the values are less or equal than zero,
     # hence the agent select a random possible action
     if (first_value <= 0):
-        # Check which moves make sense at all
-        valid_tiles, valid_actions, idx_action = [], [], []
-
-        # Go over all the possible directions
-        for d in directions:
-            if (arena[d] == 0):
-                valid_tiles.append(d)
-        
-        # Save the valid actions to be chosen
-        if (x,y-1) in valid_tiles: 
-            valid_actions.append('UP')
-            idx_action.append(0)
-            
-        if (x,y+1) in valid_tiles:
-            valid_actions.append('DOWN')
-            idx_action.append(1) 
-            
-        if (x-1,y) in valid_tiles:
-            valid_actions.append('LEFT')
-            idx_action.append(2)
-            
-        if (x+1,y) in valid_tiles: 
-            valid_actions.append('RIGHT')
-            idx_action.append(3)
-            
-        if (x,y)in valid_tiles: 
-            valid_actions.append('WAIT')
-            idx_action.append(4)
-        
         # Get a random action from the valid actions
-        idx_rand = np.random.randint(len(valid_actions))
-        a_new = valid_actions[idx_rand]
-        self.idx_action = idx_action[idx_rand]
+        a_new, self.idx_action = pick_random(x, y, arena)
         self.best_value = first_value
         self.random = self.random +1 
     else:
@@ -237,14 +235,18 @@ def act(self):
             d = directions[idx_a] 
             # Check if a valid action
             if (arena[d]==0):
-                a_new = self.actions[idx_a]
-                self.idx_action = idx_a
+                # This value could be 0 after several steps
+                if (Q_value<=0):
+                    a_new, self.idx_action = pick_random(x, y, arena)
+                else:
+                    a_new = self.actions[idx_a]
+                    self.idx_action = idx_a
+                    
                 self.best_value = Q_value
                 break
-        
+               
     self.next_action = a_new
-    
-    
+        
              
 '''
     # If agent has been in the same location three times recently, it's a loop
@@ -364,14 +366,19 @@ def reward_update(self):
     
     self.Q[x,y,0,self.idx_action] = self.R[x,y,0,self.idx_action] + self.gamma*self.best_value
     
+    self.logger.debug(f'Q UP:\n {self.Q[:,:,0,0]}')
+    self.logger.debug(f'Q DOWN:\n {self.Q[:,:,0,1]}')
+    self.logger.debug(f'Q LEFT:\n {self.Q[:,:,0,2]}')
+    self.logger.debug(f'Q RIGHT:\n {self.Q[:,:,0,3]}')
+    
+    
     # Since a coin was found, the matrix Q should be updated accordingly
     if e.COIN_COLLECTED in self.events:
         self.logger.debug("COIN COLLECTED")
-        directions = [(x,y-1), (x,y+1), (x-1,y), (x+1,y), (x,y)]
-        for d in directions:
-            x0, y0 = d
-            self.Q[x0,y0,0,:] = 0.0
-    
+        self.Q.fill(0)
+        #for nsa in self.list_nsa:
+        #    self.Q[nsa] = 0
+        #self.list_nsa = []
 
 def end_of_episode(self):
     """Called at the end of each game to hand out final rewards and do training.
