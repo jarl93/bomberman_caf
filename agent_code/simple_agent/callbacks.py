@@ -202,7 +202,9 @@ def act(self):
     # Keep track of chosen action for cycle detection
     if self.next_action == 'BOMB':
         self.bomb_history.append((x,y))
-
+    tempo = self.game_state['self'] 
+    #print(tempo)
+    #self.logger.debug(f'Self state game {tempo}')
 
 def reward_update(self):
     """Called once per step to allow intermediate rewards based on game events.
