@@ -5,126 +5,80 @@ from collections import deque
 
 from settings import s, e
 
-def get_region(xa, ya, xo, yo):
-    # upper
-    if (xo == xa and yo < ya):
-        return 0
-    # lower
-    if (xo == xa and yo > ya):
-        return 1
-    # left
-    if (xo < xa and yo == ya):
-        return 2
-    # right
-    if (xo > xa and yo == ya):
-        return 3
 
-    # upper-left
-    if (xo < xa and yo < ya):
-        return 4
-    # lower-left
-    if (xo < xa and yo > ya):
-        return 5
-    # lower-right
-    if (xo > xa and yo > ya):
-        return 6
-    # upper-right
-    if (xo > xa and yo < ya):
-        return 7
-    return -1
-
-def get_distance_coins(self, xa, ya, arena, coins):
+def distance_bfs(self, xa, ya, xo, yo, arena):
     queue = deque([(xa, ya)])
     visited = {}
     visited[(xa, ya)] = 0
-    num_coins = 0
-    dist_path = 0
-    coins_region = []
-
-    # self.logger.debug(f'AGENT:\n {xa, ya}')
-
-    for (xc, yc) in coins:
-        arena[xc, yc] = 2
-        num_coins += 1
-
-    # self.logger.debug(f'REGION:\n {region}')
-    # self.logger.debug(f'ARENA:\n {arena}')
-
-    while (len(queue) > 0) and (len(coins_region) < num_coins):
-
+    dist = -1
+    while (len(queue) > 0):
         curr_x, curr_y = queue.popleft()
 
-        if (arena[(curr_x, curr_y)] == 2):
-            coins_region.append((curr_x, curr_y))
-            dist_path += visited[(curr_x, curr_y)]
-            arena[(curr_x, curr_y)] = 0
-            queue = deque([(curr_x, curr_y)])
-            visited.clear()
-            visited[(curr_x, curr_y)] = 0
-
+        if (curr_x == xo and curr_y == yo):
+            dist = visited[(curr_x, curr_y)]
+            break
         directions = [(curr_x, curr_y - 1), (curr_x, curr_y + 1), (curr_x - 1, curr_y), (curr_x + 1, curr_y)]
         for (xd, yd) in directions:
             d = (xd, yd)
-            if (arena[d] == 0 or arena[d] == 2) and (not d in visited):
+            if (arena[d] == 0) and (not d in visited):
                 queue.append(d)
                 visited[d] = visited[(curr_x, curr_y)] + 1
+    return dist
 
-    return dist_path
 
-def get_ratio_coins(self, xa, ya, region, arena, coins):
-    queue = deque([(xa, ya)])
-    visited = {}
-    visited[(xa, ya)] = 0
-    num_coins = 0
-    dist_path = 0
-    coins_region = []
-    ratio = 0
+def get_region_valid(self, xa, ya, xo, yo, valid):
+    region = np.array([0, 0, 0, 0])
+    region_valid = np.array([0, 0, 0, 0])
 
-    # self.logger.debug(f'AGENT:\n {xa, ya}')
+    # upper
+    if (xo == xa and yo < ya):
+        region = np.array([1, 0, 0, 0])
+    # lower
+    if (xo == xa and yo > ya):
+        region = np.array([0, 1, 0, 0])
+    # left
+    if (xo < xa and yo == ya):
+        region = np.array([0, 0, 1, 0])
+    # right
+    if (xo > xa and yo == ya):
+        region = np.array([0, 0, 0, 1])
 
-    for (xc, yc) in coins:
-        if get_region(xa, ya, xc, yc) == region:
-            arena[xc, yc] = 2
-            num_coins += 1
+    # upper-left
+    if (xo < xa and yo < ya):
+        region = np.array([1, 0, 1, 0])
+    # lower-left
+    if (xo < xa and yo > ya):
+        region = np.array([0, 1, 1, 0])
+    # lower-right
+    if (xo > xa and yo > ya):
+        region = np.array([0, 1, 0, 1])
+    # upper-right
+    if (xo > xa and yo < ya):
+        region = np.array([1, 0, 0, 1])
 
-    # self.logger.debug(f'REGION:\n {region}')
-    # self.logger.debug(f'ARENA:\n {arena}')
-    if num_coins > 0:
-        while (len(queue) > 0) and (len(coins_region) < num_coins):
+    region_valid = valid & region
 
-            curr_x, curr_y = queue.popleft()
+    if (np.count_nonzero(region_valid) == 0):
+        list_valid = []
+        for bit in range(4):
+            valid_candidate = np.array([0, 0, 0, 0])
+            if valid[bit] == 1:
+                valid_candidate[bit] = 1
+            list_valid.append(valid_candidate)
 
-            if (arena[(curr_x, curr_y)] == 2):
-                coins_region.append((curr_x, curr_y))
-                dist_path += visited[(curr_x, curr_y)]
-                arena[(curr_x, curr_y)] = 0
-                queue = deque([(curr_x, curr_y)])
-                visited.clear()
-                visited[(curr_x, curr_y)] = 0
+        if len(list_valid) > 0:
+            idx_valid = np.random.choice(len(list_valid))
+            region_valid = list_valid[idx_valid]
 
-            directions = [(curr_x, curr_y - 1), (curr_x, curr_y + 1), (curr_x - 1, curr_y), (curr_x + 1, curr_y)]
-            for (xd, yd) in directions:
-                d = (xd, yd)
-                if (arena[d] == 0 or arena[d] == 2) and (not d in visited):
-                    queue.append(d)
-                    visited[d] = visited[(curr_x, curr_y)] + 1
-
-        # self.logger.debug(f'COINS REGION:\n {coins_region}')
-
-        if (dist_path > 0):
-            ratio = num_coins / dist_path
-
-    # self.logger.debug(f'COINS, DISTANCE:\n {num_coins, dist_path}')
-
-    return ratio
+    return region_valid
 
 def mappping(self):
     # State definition
 
     # Gather information about the game state
     arena = self.game_state['arena']
-    aux = np.zeros((s.rows, s.cols), dtype=int)
-    aux[:, :] = self.game_state['arena']
+    # aux_arena = np.zeros((s.rows, s.cols))
+    # aux_arena[:,:] = arena
     x, y, _, bombs_left, score = self.game_state['self']
     # bombs = self.game_state['bombs']
     # bomb_xys = [(x,y,t) for (x,y,t) in bombs]
@@ -140,55 +94,51 @@ def mappping(self):
     #            if (t - abs(h) > 0):
     #                bomb_map[i,j] = (t - abs(h))
 
-    # if self.game_state['step'] == 1:
-    #     self.distance_coins_total = get_distance_coins(self, x, y, arena, coins)
+    # General case
+    # state = np.zeros(32, dtype = int)
 
     # Coins case
-    state = np.zeros(self.state_size)
+    state = np.zeros(8)
 
     # 0. UP ->    (x  , y-1)
     # 1. DOWN ->  (x  , y+1)
     # 2. LEFT ->  (x-1, y  )
     # 3. RIGHT -> (x+1, y  )
 
-    # 4 bits for position
+    # 4 bits for valid position
+    valid = np.array([0, 0, 0, 0])
 
     directions = [(x, y - 1), (x, y + 1), (x - 1, y), (x + 1, y)]
     for i in range(4):
         d = directions[i]
         if (arena[d] == 0):
-            state[i] = 1
+            valid[i] = 1
 
-    # for coord in coins:
-    #    aux[coord] = 2
+    state[:4] = valid
 
-    # self.logger.debug(f'ARENA AUX:\n {aux}')
+    list_dist = []
+    # 4 bits for nearest coin
+    for (xc, yc) in coins:
+        # aux_arena[(xc,yc)] = 2
+        list_dist.append(distance_bfs(self, x, y, xc, yc, arena))
 
-    # get the ratio number of coins/distance to the coins
-    state_coins = np.zeros(8)
-    for r in range(8):
-        state_coins[r] = get_ratio_coins(self, x, y, r, arena, coins)
+    # aux_arena[x,y] = 5
 
-    # tie - breaker
-    idx = np.where(state_coins == np.amax(state_coins))
-    list_idx = list(idx[0])
+    # self.logger.debug(f'ARENA:\n {aux_arena}')
 
+    # self.logger.debug(f'Distance coins: {list_dist}')
+    if len(list_dist) > 0:
+        min_dist = np.min(np.array(list_dist))
+    if len(list_dist) > 0 and min_dist > -1:
+        idx_min = np.argmin(np.array(list_dist))
+        x_min, y_min = coins[idx_min]
+        state[4:] = get_region_valid(self, x, y, x_min, y_min, valid)
 
-
-    if (len(list_idx) > 1):
-        self.logger.debug("TIE")
-
-        for i in list_idx:
-            state_coins[i] *= np.random.uniform(0.7, 1)
-
-    state[4:] = state_coins
-    self.logger.debug(f'POSITION:\n {x, y}')
     self.logger.debug(f'STATE VALID: {state[:4]}')
     self.logger.debug(f'STATE COINS: {state[4:]}')
 
- #   print(state)
-
     return state
+
 
 def setup(self):
     self.logger.debug('Successfully entered setup code')
