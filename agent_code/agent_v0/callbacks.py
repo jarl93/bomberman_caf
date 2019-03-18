@@ -32,6 +32,45 @@ def build_model(self):
     
     return model
 
+def get_distance_coins(self, xa, ya, arena, coins):
+    queue = deque([(xa, ya)])
+    visited = {}
+    visited[(xa, ya)] = 0
+    num_coins = 0
+    dist_path = 0
+    coins_region = []
+
+    # self.logger.debug(f'AGENT:\n {xa, ya}')
+
+    for (xc, yc) in coins:
+        arena[xc, yc] = 2
+        num_coins += 1
+
+    # self.logger.debug(f'REGION:\n {region}')
+    # self.logger.debug(f'ARENA:\n {arena}')
+
+    while (len(queue) > 0) and (len(coins_region) < num_coins):
+
+        curr_x, curr_y = queue.popleft()
+
+        if (arena[(curr_x, curr_y)] == 2):
+            coins_region.append((curr_x, curr_y))
+            dist_path += visited[(curr_x, curr_y)]
+            arena[(curr_x, curr_y)] = 0
+            queue = deque([(curr_x, curr_y)])
+            visited.clear()
+            visited[(curr_x, curr_y)] = 0
+
+        directions = [(curr_x, curr_y - 1), (curr_x, curr_y + 1), (curr_x - 1, curr_y), (curr_x + 1, curr_y)]
+        for (xd, yd) in directions:
+            d = (xd, yd)
+            if (arena[d] == 0 or arena[d] == 2) and (not d in visited):
+                queue.append(d)
+                visited[d] = visited[(curr_x, curr_y)] + 1
+
+    return dist_path
+
+
 def distance_bfs (self, xa, ya, xo, yo, arena):
     queue  = deque([(xa,ya)])
     visited = {}
@@ -571,7 +610,7 @@ def end_of_episode(self):
     self.logger.debug(f'A-InvalidModel: {self.actions_taken_model_invalid}')
     self.logger.debug(f'A-Total: {total_actions}')
     self.logger.debug(f'T-Action: {self.elapsed_time_action/total_actions}')
-    self.logger.debug(f'T-Model: {self.elapsed_time_model/self.actions_taken_model}')
+    self.logger.debug(f'T-Model: {self.elapsed_time_model/(self.actions_taken_model+1)}')
     self.logger.debug(f'T-TimeEpisodes: {elapsed_time} :s')
     self.logger.debug(f'M-Model_Invalid/ModelAct: {(self.actions_taken_model_invalid)/(self.actions_taken_model+1)}')
     self.logger.debug(f'M-Steps/OptimalDistance: {total_actions/self.distance_coins_total}')
