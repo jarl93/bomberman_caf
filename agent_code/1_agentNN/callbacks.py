@@ -740,7 +740,7 @@ def reward_update(self):
     # Update the model
     start_time1Model = time()
     update_model(self, False)
-    self.elapsed_time_model = time() - start_time1Model
+    self.elapsed_time_model += time() - start_time1Model
 
 def end_of_episode(self):
     """Called at the end of each game to hand out final rewards and do training.
@@ -785,12 +785,12 @@ def end_of_episode(self):
     self.logger.debug(f'A-Model: {self.actions_taken_model}')
     self.logger.debug(f'A-InvalidModel: {self.actions_taken_model_invalid}')
     self.logger.debug(f'A-Total: {totalsteps}')
-    self.logger.debug(f'T-Action: {self.elapsed_time_action/totalsteps}')
+    self.logger.debug(f'T-Action: {self.elapsed_time_action/self.actions_taken_model}')
     self.logger.debug(f'T-Model: {self.elapsed_time_model/totalsteps}')
     self.logger.debug(f'T-TimeEpisodes: {elapsed_time} :s')
     self.logger.debug(f'M-Model_Invalid/ModelAct: {(self.actions_taken_model_invalid)/(self.actions_taken_model+1)}')
-    self.logger.debug(f'M-Steps/OptimalDistance: {totalsteps/self.distance_coins_total}')
-
+    self.logger.debug(f'M-Steps/OptimalDistance: {totalsteps / self.distance_coins_total}')
+    self.logger.debug(f'QMean: {self.q_mean}')
 
     #Init counters once an episode has ended
     self.coins_collected = 0

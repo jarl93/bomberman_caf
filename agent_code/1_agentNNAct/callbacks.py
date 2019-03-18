@@ -365,7 +365,7 @@ def setup(self):
     self.q_mean = 0.0
 
     # MODEL
-    self.model_path = './agent_code/1_agentNN/model.h5'
+    self.model_path = './agent_code/agent_v0/model.h5'
     # NN for training
     #self.model = build_model(self)
 

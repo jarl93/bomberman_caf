@@ -128,7 +128,10 @@ def mappping(self):
     coins = self.game_state['coins']
     #explosion_map = self.game_state['explosions']
     #bomb_map = np.zeros(arena.shape)
-    
+
+    #Get optimal distance:
+    if self.game_state['step'] == 1:
+        self.distance_coins_total = get_distance_coins(self, x, y, arena, coins)
     # map for bombs
     #for (xb, yb, t) in bombs:
     #    for (i, j, h) in [(xb+h, yb, h) for h in range(-3,4)] + [(xb, yb+h, h) for h in range(-3,4)]:
@@ -194,6 +197,11 @@ def get_reward(self):
     if e.INVALID_ACTION in self.events:
         reward += self.reward_list['INVALID_ACTION']
         self.actions_invalid += 1
+        if self.flag_actions_taken_model == 1:
+            self.actions_taken_model_invalid += 1
+            # Flag, if the action belongs to the model to 0
+            self.flag_actions_taken_model = 0
+
         self.logger.debug("INVALID ACTION")
         
     # A coin was found, therefore the agent receives a reward for that
@@ -378,7 +386,7 @@ def setup(self):
     self.memory = deque(maxlen= self.memory_size)
     
     #MODEL
-    self.model_path = './agent_code/caf_agent_coins_min_distance/model_v_valid_region.h5'
+    self.model_path = './agent_code/agent_v0/model.h5'
     
     # NN for training
     self.model = build_model(self)
@@ -411,35 +419,43 @@ def setup(self):
             'VALID' : -2,
             'DIE' : -1500
     }
-    
+
     # COUNTERS
-    
+
     # Total steps
     self.total_steps = 0
     # Random actions taken
     self.actions_taken_random = 0
+    # Simple agent actions taken
+    self.actions_taken_simple = 0
     # Actions taken based on the model
     self.actions_taken_model = 0
+    # Invalid Actions taken based on the model
+    self.actions_taken_model_invalid = 0
+    # Flag, if the action belongs to the model
+    self.flag_actions_taken_model = 0
     # Coins collected
     self.coins_collected = 0
     # Number of episodes
     self.episodes = 0
     # Number of invalid actions
     self.actions_invalid = 0
-    
+
     # Measures
     self.start_time1 = time()
     self.start_time2 = time()
     self.reward_episode = 0
-    
+    self.reward_total = 0
+    self.elapsed_time_action = 0.0
+    self.elapsed_time_model = 0.0
+    self.q_mean = 0.0
+    self.distance_coins_total = 0.0
     #Lists
     self.list_reward = []
     self.list_score = np.zeros(10)
     self.list_invalid_actions = []
     self.list_total_actions = []
-                              
-    
-    
+
 def act(self):
     """Called each game step to determine the agent's next action.
 
@@ -476,12 +492,20 @@ def act(self):
         self.actions_taken_random += 1
     #Exploitation
     else:
+        #Start counting time Action model
+        start_time1Act = time()
         self.logger.info('Picking action according to the MODEL')
         q_values = self.model.predict( self.state.reshape((1, self.state_size)) )
         self.idx_action = np.argmax(q_values[0])
         self.next_action = self.actions[self.idx_action]
         # Increase the number of actions that has been taken based on the model
         self.actions_taken_model += 1
+        # Flag, if the action belongs to the model
+        self.flag_actions_taken_model = 1
+        self.q_mean += np.sum(q_values[0])/self.num_actions  ##neu
+        #time end action
+        self.elapsed_time_action += time() - start_time1Act
+
 
 def reward_update(self):
     """Called once per step to allow intermediate rewards based on game events.
@@ -496,10 +520,13 @@ def reward_update(self):
     
     # Get the reward based on the events from the previous step
     get_reward(self)
-    
+
     # Update the model
-    update_model(self, False)   
-        
+    start_time1Model = time()
+    update_model(self, False)
+    self.elapsed_time_model += time() - start_time1Model
+
+
 def end_of_episode(self):
     """Called at the end of each game to hand out final rewards and do training.
 
@@ -524,20 +551,33 @@ def end_of_episode(self):
     else:
         self.start_time2 = time()
         elapsed_time = time() - self.start_time1
-        
-   
+
+    total_actions = self.actions_taken_random + self.actions_taken_model
+    self.q_mean /= total_actions
+    self.reward_total += self.reward_episode
+
     x, y, _, bombs_left, score = self.game_state['self']
     
-    self.logger.debug(f'JARL-Episode: {self.episodes}')
-    self.logger.debug(f'JARL-Score: {score}')
-    self.logger.debug(f'JARL-Epsilon: {self.epsilon}')
-    self.logger.debug(f'JARL-Random actions: {self.actions_taken_random}')
-    self.logger.debug(f'JARL-Model actions: {self.actions_taken_model}')
-    self.logger.debug(f'JARL-Invalid actions: {self.actions_invalid}')
-    self.logger.debug(f'JARL-Accumulated reward: {self.reward_episode}')
-    self.logger.debug(f'JARL-Time: {elapsed_time} s')
-    
-    total_actions = self.actions_taken_random + self.actions_taken_model
+    #some conventions, P-'Performance' S-'Setings' A-'Action' T-'Time'
+    self.logger.debug(f'P-Score: {score}')
+    self.logger.debug(f'P-Reward acommulated: {self.reward_episode}')
+    self.logger.debug(f'P-RewardsTotal: {self.reward_total}')
+    self.logger.debug(f'S-Episode: {self.episodes}')
+    self.logger.debug(f'S-Epsilon: {self.epsilon}')
+    self.logger.debug(f'A-Invalid: {self.actions_invalid}')
+    self.logger.debug(f'A-Random: {self.actions_taken_random}')
+    #self.logger.debug(f'A-Simple: {self.actions_taken_simple}')
+    self.logger.debug(f'A-Model: {self.actions_taken_model}')
+    self.logger.debug(f'A-InvalidModel: {self.actions_taken_model_invalid}')
+    self.logger.debug(f'A-Total: {total_actions}')
+    self.logger.debug(f'T-Action: {self.elapsed_time_action/total_actions}')
+    self.logger.debug(f'T-Model: {self.elapsed_time_model/self.actions_taken_model}')
+    self.logger.debug(f'T-TimeEpisodes: {elapsed_time} :s')
+    self.logger.debug(f'M-Model_Invalid/ModelAct: {(self.actions_taken_model_invalid)/(self.actions_taken_model+1)}')
+    self.logger.debug(f'M-Steps/OptimalDistance: {total_actions/self.distance_coins_total}')
+    self.logger.debug(f'QMean: {self.q_mean}')
+
+
     
     self.list_reward.append(self.reward_episode)
     self.list_score [score] += 1
@@ -554,14 +594,13 @@ def end_of_episode(self):
         self.list_score = np.zeros (10)
         self.list_invalid_actions = []
         self.list_total_actions = []
-                              
-    
-    #Init counters once an episode has ended
+
+    # Init counters once an episode has ended
     self.coins_collected = 0
     self.actions_taken_model = 0
     self.actions_taken_random = 0
+    self.actions_taken_simple = 0
     self.actions_invalid = 0
     self.reward_episode = 0
-    
-    
-    
+    self.q_mean = 0.0
+    self.actions_taken_model_invalid = 0
