@@ -26,9 +26,10 @@ def distance_bfs(self, xa, ya, xo, yo, arena):
     return dist
 
 
-def get_region_valid(self, xa, ya, xo, yo, valid):
+def get_region_valid(self, xa, ya, xo, yo, valid, arena):
     region = np.array([0, 0, 0, 0])
     region_valid = np.array([0, 0, 0, 0])
+    directions = [(xa, ya - 1), (xa, ya + 1), (xa - 1, ya), (xa + 1, ya)]
 
     # upper
     if (xo == xa and yo < ya):
@@ -70,7 +71,21 @@ def get_region_valid(self, xa, ya, xo, yo, valid):
             idx_valid = np.random.choice(len(list_valid))
             region_valid = list_valid[idx_valid]
 
+    if (np.count_nonzero(region_valid) == 2):
+        d_min = 1000000
+        for i in range(4):
+            region_valid_min = np.array([0, 0, 0, 0])
+            if region_valid[i] == 1:
+                x_curr, y_curr = directions[i]
+                d_curr = distance_bfs(self, x_curr, y_curr, xo, yo, arena)
+                if d_curr < d_min:
+                    region_valid_min[i] = 1
+                    d_min = d_curr
+
+        region_valid = region_valid_min
+
     return region_valid
+
 
 def mappping(self):
     # State definition
@@ -132,7 +147,7 @@ def mappping(self):
     if len(list_dist) > 0 and min_dist > -1:
         idx_min = np.argmin(np.array(list_dist))
         x_min, y_min = coins[idx_min]
-        state[4:] = get_region_valid(self, x, y, x_min, y_min, valid)
+        state[4:] = get_region_valid(self, x, y, x_min, y_min, valid, arena)
 
     self.logger.debug(f'STATE VALID: {state[:4]}')
     self.logger.debug(f'STATE COINS: {state[4:]}')

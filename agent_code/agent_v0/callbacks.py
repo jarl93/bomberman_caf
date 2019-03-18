@@ -55,7 +55,7 @@ def get_region_valid (self, xa, ya, xo, yo, valid, arena):
     
     region = np.array([0,0,0,0])
     region_valid = np.array([0,0,0,0])
-    directions = [(xa, ya-1), (xa, ya+1), (xa-1, ya), (xa+1, curr_y)]
+    directions = [(xa, ya-1), (xa, ya+1), (xa-1, ya), (xa+1, ya)]
     
     # upper
     if (xo == xa and yo < ya):
