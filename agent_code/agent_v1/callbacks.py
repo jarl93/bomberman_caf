@@ -175,7 +175,7 @@ def mappping(self):
     # state = np.zeros(32, dtype = int)
     
     # Coins case
-    state = np.zeros(14)
+    state = np.zeros(self.state_size)
     
     # 0. UP ->    (x  , y-1)
     # 1. DOWN ->  (x  , y+1)
@@ -225,6 +225,10 @@ def mappping(self):
             x_next, y_next = directions[i]
             if arena[(x_next, y_next)] == 0:
                 free_cells[i] = get_free_cells(self, x_next, y_next, arena, bomb_dic, explosion_map, time)
+                
+    if np.count_nonzero(free_cells) > 0:
+        idx_max = np.argmax(free_cells)
+        state[10+idx_max] = 1
 
     # Number of crates
     
@@ -245,14 +249,14 @@ def mappping(self):
                 
         
     state[9] = danger
-    state[10:14] = free_cells
+    #state[10:14] = free_cells
     state[14] = number_crates
     
-    self.logger.debug(f'STATE VALID: {state[:4]}')
-    self.logger.debug(f'STATE COINS: {state[4:8]}')
-    self.logger.debug(f'STATE DANGER: {state[8]}')
-    self.logger.debug(f'STATE ESCAPE: {state[9:13]}')
-    self.logger.debug(f'STATE CRATES: {state[13]}')
+    self.logger.debug(f'STATE VALID: {state[:5]}')
+    self.logger.debug(f'STATE COINS: {state[5:9]}')
+    self.logger.debug(f'STATE DANGER: {state[9]}')
+    self.logger.debug(f'STATE ESCAPE: {state[10:14]}')
+    self.logger.debug(f'STATE CRATES: {state[14]}')
 
     return state
     
@@ -419,7 +423,7 @@ def setup(self):
     #STATE
     
     # state size
-    self.state_size = 14 
+    self.state_size = 15
 
     self.state = np.zeros(self.state_size)
     
