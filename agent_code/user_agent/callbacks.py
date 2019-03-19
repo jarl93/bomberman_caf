@@ -88,6 +88,32 @@ def get_region_valid(self, xa, ya, xo, yo, valid, arena):
     return region_valid
 
 
+def get_free_cells(self, xa, ya, arena, bomb_map, explosion_map, time):
+    queue = deque([(xa, ya)])
+    visited = {}
+    visited[(xa, ya)] = 1
+    free = 0
+    while (len(queue) > 0):
+        curr_x, curr_y = queue.popleft()
+        curr = (curr_x, curr_y)
+        directions = [(curr_x, curr_y - 1), (curr_x, curr_y + 1), (curr_x - 1, curr_y), (curr_x + 1, curr_y)]
+
+        if (visited[curr]) == time:
+            break
+
+        for (xd, yd) in directions:
+            d = (xd, yd)
+            if ((arena[d] == 0) and
+                    (explosion_map[curr] <= visited[curr] + 1) and
+                    (not d in visited) and
+                    (bomb_map[d] == 0)):
+                queue.append(d)
+                visited[d] = visited[curr] + 1
+                free += 1
+
+    return free
+
+
 def mappping(self):
     # State definition
 
@@ -96,25 +122,25 @@ def mappping(self):
     # aux_arena = np.zeros((s.rows, s.cols))
     # aux_arena[:,:] = arena
     x, y, _, bombs_left, score = self.game_state['self']
-    # bombs = self.game_state['bombs']
-    # bomb_xys = [(x,y,t) for (x,y,t) in bombs]
+    bombs = self.game_state['bombs']
+    bombs_xys = [(x, y, t) for (x, y, t) in bombs]
     # others = [(x,y) for (x,y,n,b,s) in self.game_state['others']]
     coins = self.game_state['coins']
-    # explosion_map = self.game_state['explosions']
-    # bomb_map = np.zeros(arena.shape)
+    explosion_map = self.game_state['explosions']
+    bomb_map = np.zeros(arena.shape)
 
     # map for bombs
-    # for (xb, yb, t) in bombs:
-    #    for (i, j, h) in [(xb+h, yb, h) for h in range(-3,4)] + [(xb, yb+h, h) for h in range(-3,4)]:
-    #        if (0 < i < bomb_map.shape[0]) and (0 < j < bomb_map.shape[1]):
-    #            if (t - abs(h) > 0):
-    #                bomb_map[i,j] = (t - abs(h))
+    for (xb, yb, t) in bombs_xys:
+        for (i, j) in [(xb + h, yb) for h in range(-3, 4)] + [(xb, yb + h) for h in range(-3, 4)]:
+            if (0 < i < bomb_map.shape[0]) and (0 < j < bomb_map.shape[1]) and (arena[(i,j)] != -1):
+                bomb_map[i, j] = max(bomb_map[i, j], t)
 
+    print(bomb_map)
     # General case
     # state = np.zeros(32, dtype = int)
 
     # Coins case
-    state = np.zeros(8)
+    state = np.zeros(13)
 
     # 0. UP ->    (x  , y-1)
     # 1. DOWN ->  (x  , y+1)
@@ -127,7 +153,7 @@ def mappping(self):
     directions = [(x, y - 1), (x, y + 1), (x - 1, y), (x + 1, y)]
     for i in range(4):
         d = directions[i]
-        if (arena[d] == 0):
+        if (arena[d] == 0 and explosion_map[d] <= 1):
             valid[i] = 1
 
     state[:4] = valid
@@ -148,15 +174,46 @@ def mappping(self):
     if len(list_dist) > 0 and min_dist > -1:
         idx_min = np.argmin(np.array(list_dist))
         x_min, y_min = coins[idx_min]
-        state[4:] = get_region_valid(self, x, y, x_min, y_min, valid, arena)
+        state[4:8] = get_region_valid(self, x, y, x_min, y_min, valid, arena)
+
+    # DANGER
+    free_cells = np.zeros(4)
+    danger = 0
+    if bomb_map[(x, y)] > 0:
+        danger = 1
+        print("Primer if",danger)
+        for i in range(4):
+            time = bomb_map[(x, y)]
+            x_next, y_next = directions[i]
+            if arena[(x_next,y_next)] == 0 :
+                free_cells[i] = get_free_cells(self, x_next, y_next, arena, bomb_map, explosion_map, time)
+        print("Segundo if",danger)
+
+
+    #print(danger)
+
+    state[8:9] = danger
+    state[9:] = free_cells
+
+    #print("Aca:  ", state[8])
 
     self.logger.debug(f'STATE VALID: {state[:4]}')
     self.logger.debug(f'STATE COINS: {state[4:]}')
+
+    #print("Aca:  ",state[8])
 
     return state
 
 
 def setup(self):
+    """Called once before a set of games to initialize data structures etc.
+
+    The 'self' object passed to this method will be the same in all other
+    callback methods. You can assign new properties (like bomb_history below)
+    here or later on and they will be persistent even across multiple games.
+    You can also use the self.logger object at any time to write to the log
+    file for debugging (see https://docs.python.org/3.7/library/logging.html).
+    """
     self.logger.debug('Successfully entered setup code')
     np.random.seed()
 
@@ -170,10 +227,7 @@ def setup(self):
     # 4. WAIT ->  (x  , y  )
     # 5. BOMB ->  (x  , y  )
 
-    # self.actions = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'WAIT', 'BOMB']
-
-    # Case to just collect the coins
-    self.actions = ['UP', 'DOWN', 'LEFT', 'RIGHT']
+    self.actions = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'WAIT', 'BOMB']
 
     # Init map of actions
     self.map_actions = {
@@ -184,27 +238,73 @@ def setup(self):
         'WAIT': 4,
         'BOMB': 5
     }
+
+    # Number of possible actions
+    self.num_actions = 6
+
+    # action index (this is really the variable used as action)
+    self.idx_action = 4
+
     # STATE
 
     # state size
-    self.state_size = 12
+    self.state_size = 13
 
     self.state = np.zeros(self.state_size)
 
     # next_state defined as state
     self.next_state = np.zeros(self.state_size)
 
-    #pass
+
+
+    # NN for playing
+    # self.model = load_model_NN(self)
+
+    # REWARDS
+
+    # Reward accumulated for every 4 frames
+    self.total_reward = 0
+
+    # Reward List
+
+    number_of_free = (s.cols - 2) * (s.rows // 2) + (s.rows // 2 - 1) * ((s.cols - 2) // 2 + 1)
+    number_of_crates = s.crate_density * (number_of_free - 12)
+    reward_coin = 100
+    if (number_of_crates > 0):
+        ratio_coins_crates = number_of_crates / 9
+        reward_crate = int(reward_coin / ratio_coins_crates)
+    else:
+        reward_crate = 0
+
+    self.reward_list = {
+        'OPPONENT_ELIMINATED': 500,
+        'COIN_COLLECTED': reward_coin,
+        'CRATE_DESTROYED': reward_crate,
+        'INVALID_ACTION': -8,
+        'VALID': -2,
+        'DIE': -1500
+    }
+
+
+
 
 def act(self):
     # Gather information about the game state
-    print(mappping(self))
+    print("\n",mappping(self),"\n")
 
     self.logger.info('Pick action according to pressed key')
     self.next_action = self.game_state['user_input']
 
 def reward_update(self):
+
+    if e.CRATE_DESTROYED in self.events:
+        NCrates =  list(self.events).count(9)
+        print("Crates Destroyed: \n", NCrates)
     pass
 
 def learn(self):
+    if e.CRATE_DESTROYED in self.events:
+        print("Events: \n",self.events)
+    pass
+
     pass
