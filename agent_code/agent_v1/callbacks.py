@@ -470,7 +470,7 @@ def setup(self):
     self.memory = deque(maxlen= self.memory_size)
     
     #MODEL
-    self.model_path = './agent_code/agent_v0/model_v_valid_region.h5'
+    self.model_path = './agent_code/agent_v1/model.h5'
     
     # NN for training
     self.model = build_model(self)
