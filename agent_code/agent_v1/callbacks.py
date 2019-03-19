@@ -226,10 +226,19 @@ def mappping(self):
     # Number of crates
     
     number_crates = 0
-    for (i, j) in [(x+h, y) for h in range(-3,4)] + [(x, y+h) for h in range(-3,4)]:
-        if (0 < i < arena.shape[0]) and (0 < j < arena.shape[1]) and (arena[(i,j)] == 1):
-            number_crates += 1
-    
+    vec_dir = [(0,-1), (0,1), (-1,0),(1,0)]
+    for v in vec_dir:
+        hx, hy = v
+        for i in range (1,4):
+            xcoord = x + hx*i
+            ycoord = y + hy*i
+            if ((0 < xcoord < arena.shape[0]) and 
+                (0 < ycoord < arena.shape[1]) and 
+                (arena[(xcoord, ycoord)] == 1 or arena[(xcoord, ycoord)] == 0)):
+                if arena[(xcoord,ycoord)] == 1:
+                    number_crates += 1
+            else:
+                break
                 
         
     state[8] = danger
@@ -237,7 +246,7 @@ def mappping(self):
     state[13] = number_crates
     
     self.logger.debug(f'STATE VALID: {state[:4]}')
-    self.logger.debug(f'STATE COINS: {state[4:]}')
+    self.logger.debug(f'STATE COINS: {state[4:8]}')
     self.logger.debug(f'STATE DANGER: {state[8]}')
     self.logger.debug(f'STATE ESCAPE: {state[9:13]}')
     self.logger.debug(f'STATE CRATES: {state[13]}')
