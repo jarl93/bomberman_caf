@@ -191,7 +191,10 @@ def mappping(self):
         if (arena[d] == 0 and explosion_map[d] <= 1):
             valid[i] = 1
     
-    state[:4] = valid 
+    state[:4] = valid
+    
+    if (bombs_left > 0):
+        state[4] = 1
     
     list_dist = []
     # 4 bits for nearest coin
@@ -209,7 +212,7 @@ def mappping(self):
     if len(list_dist) > 0 and min_dist > -1:
         idx_min = np.argmin(np.array(list_dist))        
         x_min, y_min = coins[idx_min]
-        state[4:8] = get_region_valid(self, x, y, x_min, y_min, valid, arena)
+        state[5:9] = get_region_valid(self, x, y, x_min, y_min, valid, arena)
         
         
     #DANGER
@@ -241,9 +244,9 @@ def mappping(self):
                 break
                 
         
-    state[8] = danger
-    state[9:13] = free_cells
-    state[13] = number_crates
+    state[9] = danger
+    state[10:14] = free_cells
+    state[14] = number_crates
     
     self.logger.debug(f'STATE VALID: {state[:4]}')
     self.logger.debug(f'STATE COINS: {state[4:8]}')
@@ -470,7 +473,7 @@ def setup(self):
     self.memory = deque(maxlen= self.memory_size)
     
     #MODEL
-    self.model_path = './agent_code/agent_v0/model_v_valid_region.h5'
+    self.model_path = './agent_code/agent_v1/model.h5'
     
     # NN for training
     self.model = build_model(self)
@@ -664,23 +667,23 @@ def end_of_episode(self):
     self.logger.debug(f'QMean: {self.q_mean}')
 
     
-    total_actions = self.actions_taken_random + self.actions_taken_model
+  
     
-    self.list_reward.append(self.reward_episode)
-    self.list_score [score] += 1
-    self.list_invalid_actions.append(self.actions_invalid)
-    self.list_total_actions.append(total_actions)
+#     self.list_reward.append(self.reward_episode)
+#     self.list_score [score] += 1
+#     self.list_invalid_actions.append(self.actions_invalid)
+#     self.list_total_actions.append(total_actions)
     
-    if (self.episodes % 100 == 0):
-        self.logger.debug(f'JARL-List rewards:\n {self.list_reward}')
-        self.logger.debug(f'JARL-List score:\n {self.list_score}')
-        self.logger.debug(f'JARL-List invalid:\n {self.list_invalid_actions}')
-        self.logger.debug(f'JARL-List total:\n {self.list_total_actions}')
-        self.logger.debug("HEY")
-        self.list_reward = []
-        self.list_score = np.zeros (10)
-        self.list_invalid_actions = []
-        self.list_total_actions = []
+#     if (self.episodes % 100 == 0):
+#         self.logger.debug(f'JARL-List rewards:\n {self.list_reward}')
+#         self.logger.debug(f'JARL-List score:\n {self.list_score}')
+#         self.logger.debug(f'JARL-List invalid:\n {self.list_invalid_actions}')
+#         self.logger.debug(f'JARL-List total:\n {self.list_total_actions}')
+#         self.logger.debug("HEY")
+#         self.list_reward = []
+#         self.list_score = np.zeros (10)
+#         self.list_invalid_actions = []
+#         self.list_total_actions = []
 
     # Init counters once an episode has ended
     self.coins_collected = 0
