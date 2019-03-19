@@ -453,13 +453,8 @@ def setup(self):
     self.memory = deque(maxlen= self.memory_size)
     
     #MODEL
-<<<<<<< HEAD
-    self.model_path = './agent_code/agent_v0/model.h5'
+    self.model_path = './agent_code/agent_v1/model.h5'
 
-=======
-    self.model_path = './agent_code/agent_v0/model_v_valid_region.h5'
->>>>>>> fc048905db63a2ae6fb1837aa8d6021dd61665d9
-    
     # NN for training
     self.model = build_model(self)
     
@@ -676,7 +671,7 @@ def end_of_episode(self):
         self.logger.debug(f'JARL-List score:\n {self.list_score}')
         self.logger.debug(f'JARL-List invalid:\n {self.list_invalid_actions}')
         self.logger.debug(f'JARL-List total:\n {self.list_total_actions}')
-        self.logger.debug("HEY")
+        #self.logger.debug("HEY")
         self.list_reward = []
         self.list_score = np.zeros (10)
         self.list_invalid_actions = []
@@ -694,4 +689,4 @@ def end_of_episode(self):
     self.actions_taken_model_invalid = 0
     self.actions_bomb_dropped = 0
     self.actions_killed_self = 0
-    self.number_crates_destroyed
+    self.number_crates_destroyed = 0

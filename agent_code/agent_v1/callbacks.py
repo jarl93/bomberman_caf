@@ -260,23 +260,50 @@ def get_reward(self):
     x, y, _, bombs_left, score = self.game_state['self']
     
     reward = 0
-                  
+
     # The agent took a invalid action and it should be punished
     if e.INVALID_ACTION in self.events:
         reward += self.reward_list['INVALID_ACTION']
         self.actions_invalid += 1
+        if self.flag_actions_taken_model == 1:
+            self.actions_taken_model_invalid += 1
+            # Flag, if the action belongs to the model to 0
+            self.flag_actions_taken_model = 0
+
         self.logger.debug("INVALID ACTION")
-        
+
     # A coin was found, therefore the agent receives a reward for that
     if e.COIN_COLLECTED in self.events:
         reward += self.reward_list['COIN_COLLECTED']
         self.coins_collected += 1
         self.logger.debug("COIN COLLECTED")
-    else:
-        reward += self.reward_list['VALID']
-    
+    # else:      #In case of crates, we dont mind about optimazed path
+    #    reward += self.reward_list['VALID']
+
+    # In order to incentevi the optimal number of crates destroyed per Bomb dropped:
+    # We give a reward proportional to NCrates*NCrates.
+    if e.CRATE_DESTROYED in self.events:
+        NCrates = list(self.events).count(9)
+        self.number_crates_destroyed += NCrates
+        reward += NCrates * NCrates * self.reward_list['CRATE_DESTROYED']
+        self.logger.debug(f'DESTROYED: {NCrates}')
+
+    if e.COIN_FOUND in self.events:
+        reward += self.reward_list['COIN_FOUND']
+        self.logger.debug("COIN_FOUND")
+
+    if e.KILLED_SELF in self.events:
+        reward += self.reward_list['KILLED_SELF']
+        self.logger.debug("KILLED_SELF")
+        self.actions_killed_self += 1
+
+    if e.BOMB_DROPPED in self.events:
+        self.actions_bomb_dropped += 1
+        reward += self.reward_list['BOMB_DROPPED']
+        self.logger.debug("DROP_BOMB")
+
     self.total_reward = reward
-    
+
     self.reward_episode += self.total_reward
     
 def remember(self, state, action, reward, next_state, done):
@@ -299,7 +326,6 @@ def replay(self):
         
         target_f[0][action] = target
         self.model.fit(np.array([state]), target_f, epochs=1, verbose=0)
-    
     
 def replay_quick(self):
     
@@ -475,37 +501,51 @@ def setup(self):
             'CRATE_DESTROYED' : reward_crate,
             'INVALID_ACTION': -8,
             'VALID' : -2,
-            'DIE' : -1500
+            'DIE' : -1500,
+            'COIN_FOUND' :  20,
+            'KILLED_SELF' : -500,
+            'BOMB_DROPPED': 8
     }
-    
     # COUNTERS
-    
+
     # Total steps
     self.total_steps = 0
     # Random actions taken
     self.actions_taken_random = 0
+    # Simple agent actions taken
+    self.actions_taken_simple = 0
     # Actions taken based on the model
     self.actions_taken_model = 0
+    # Invalid Actions taken based on the model
+    self.actions_taken_model_invalid = 0
+    # Flag, if the action belongs to the model
+    self.flag_actions_taken_model = 0
+
     # Coins collected
     self.coins_collected = 0
     # Number of episodes
     self.episodes = 0
     # Number of invalid actions
     self.actions_invalid = 0
-    
+
     # Measures
     self.start_time1 = time()
     self.start_time2 = time()
     self.reward_episode = 0
-    
+    self.reward_total = 0
+    self.elapsed_time_action = 0.0
+    self.elapsed_time_model = 0.0
+    self.q_mean = 0.0
+    self.actions_bomb_dropped = 0
+    self.actions_killed_self = 0
+    self.number_crates_destroyed = 0
+
     #Lists
     self.list_reward = []
     self.list_score = np.zeros(10)
     self.list_invalid_actions = []
     self.list_total_actions = []
-                              
-    
-    
+
 def act(self):
     """Called each game step to determine the agent's next action.
 
@@ -542,12 +582,18 @@ def act(self):
         self.actions_taken_random += 1
     #Exploitation
     else:
+        start_time1Act = time()
         self.logger.info('Picking action according to the MODEL')
         q_values = self.model.predict( self.state.reshape((1, self.state_size)) )
         self.idx_action = np.argmax(q_values[0])
         self.next_action = self.actions[self.idx_action]
         # Increase the number of actions that has been taken based on the model
         self.actions_taken_model += 1
+        # Flag, if the action belongs to the model
+        self.flag_actions_taken_model = 1
+        self.q_mean += np.sum(q_values[0])/self.num_actions  ##neu
+        #time end action
+        self.elapsed_time_action += time() - start_time1Act
 
 def reward_update(self):
     """Called once per step to allow intermediate rewards based on game events.
@@ -590,18 +636,33 @@ def end_of_episode(self):
     else:
         self.start_time2 = time()
         elapsed_time = time() - self.start_time1
-        
-   
+
+    total_actions = self.actions_taken_random + self.actions_taken_model
+    self.q_mean /= total_actions
+    self.reward_total += self.reward_episode
+
     x, y, _, bombs_left, score = self.game_state['self']
     
-    self.logger.debug(f'JARL-Episode: {self.episodes}')
-    self.logger.debug(f'JARL-Score: {score}')
-    self.logger.debug(f'JARL-Epsilon: {self.epsilon}')
-    self.logger.debug(f'JARL-Random actions: {self.actions_taken_random}')
-    self.logger.debug(f'JARL-Model actions: {self.actions_taken_model}')
-    self.logger.debug(f'JARL-Invalid actions: {self.actions_invalid}')
-    self.logger.debug(f'JARL-Accumulated reward: {self.reward_episode}')
-    self.logger.debug(f'JARL-Time: {elapsed_time} s')
+    #some conventions, P-'Performance' S-'Setings' A-'Action' T-'Time'
+    self.logger.debug(f'P-Score: {score}')
+    self.logger.debug(f'P-Reward acommulated: {self.reward_episode}')
+    self.logger.debug(f'P-RewardsTotal: {self.reward_total}')
+    self.logger.debug(f'S-Episode: {self.episodes}')
+    self.logger.debug(f'S-Epsilon: {self.epsilon}')
+    self.logger.debug(f'A-Invalid: {self.actions_invalid}')
+    self.logger.debug(f'A-Random: {self.actions_taken_random}')
+    #self.logger.debug(f'A-Simple: {self.actions_taken_simple}')
+    self.logger.debug(f'A-Model: {self.actions_taken_model}')
+    self.logger.debug(f'A-InvalidModel: {self.actions_taken_model_invalid}')
+    self.logger.debug(f'A-Total: {total_actions}')
+    self.logger.debug(f'T-Action: {self.elapsed_time_action/total_actions}')
+    self.logger.debug(f'T-Model: {self.elapsed_time_model/(self.actions_taken_model+1)}')
+    self.logger.debug(f'T-TimeEpisodes: {elapsed_time} :s')
+    self.logger.debug(f'M-Model_Invalid/ModelAct: {(self.actions_taken_model_invalid)/(self.actions_taken_model+1)}')
+    self.logger.debug(f'M-KilledSelfRate: {self.actions_killed_self / self.actions_bomb_dropped}')
+    self.logger.debug(f'M-Crates/BombsDroped: {self.actions_killed_self / self.actions_bomb_dropped}')
+    self.logger.debug(f'QMean: {self.q_mean}')
+
     
     total_actions = self.actions_taken_random + self.actions_taken_model
     
@@ -620,14 +681,17 @@ def end_of_episode(self):
         self.list_score = np.zeros (10)
         self.list_invalid_actions = []
         self.list_total_actions = []
-                              
-    
-    #Init counters once an episode has ended
+
+    # Init counters once an episode has ended
     self.coins_collected = 0
     self.actions_taken_model = 0
     self.actions_taken_random = 0
+    self.actions_taken_simple = 0
     self.actions_invalid = 0
     self.reward_episode = 0
-    
-    
+    self.q_mean = 0.0
+    self.actions_taken_model_invalid = 0
+    self.actions_bomb_dropped = 0
+    self.actions_killed_self = 0
+    self.number_crates_destroyed = 0
     
