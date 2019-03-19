@@ -166,18 +166,23 @@ def mappping(self):
     #others = [(x,y) for (x,y,n,b,s) in self.game_state['others']]
     coins = self.game_state['coins']
     #explosion_map = self.game_state['explosions']
+<<<<<<< HEAD
     #bomb_map = np.zeros(arena.shape)
 
     #Get optimal distance:
     if self.game_state['step'] == 1:
         self.distance_coins_total = get_distance_coins(self, x, y, arena, coins)
 
+=======
+    bomb_map = np.zeros(arena.shape)
+    
+>>>>>>> fc048905db63a2ae6fb1837aa8d6021dd61665d9
     # map for bombs
-    #for (xb, yb, t) in bombs:
-    #    for (i, j, h) in [(xb+h, yb, h) for h in range(-3,4)] + [(xb, yb+h, h) for h in range(-3,4)]:
+    # for (xb, yb, t) in bombs:
+    #    for (i, j) in [(xb+h, yb) for h in range(-3,4)] + [(xb, yb+h) for h in range(-3,4)]:
     #        if (0 < i < bomb_map.shape[0]) and (0 < j < bomb_map.shape[1]):
-    #            if (t - abs(h) > 0):
-    #                bomb_map[i,j] = (t - abs(h))
+    #            bomb_map[i,j] = t
+    
     
     
     # General case
@@ -448,8 +453,12 @@ def setup(self):
     self.memory = deque(maxlen= self.memory_size)
     
     #MODEL
+<<<<<<< HEAD
     self.model_path = './agent_code/agent_v0/model.h5'
 
+=======
+    self.model_path = './agent_code/agent_v0/model_v_valid_region.h5'
+>>>>>>> fc048905db63a2ae6fb1837aa8d6021dd61665d9
     
     # NN for training
     self.model = build_model(self)

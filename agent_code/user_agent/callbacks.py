@@ -88,7 +88,7 @@ def get_region_valid(self, xa, ya, xo, yo, valid, arena):
     return region_valid
 
 
-def get_free_cells(self, xa, ya, arena, bomb_map, explosion_map, time):
+def get_free_cells(self, xa, ya, arena, bomb_dic, explosion_map, time):
     queue = deque([(xa, ya)])
     visited = {}
     visited[(xa, ya)] = 1
@@ -105,11 +105,12 @@ def get_free_cells(self, xa, ya, arena, bomb_map, explosion_map, time):
             d = (xd, yd)
             if ((arena[d] == 0) and
                     (explosion_map[curr] <= visited[curr] + 1) and
-                    (not d in visited) and
-                    (bomb_map[d] == 0)):
+                    (not d in bomb_dic or not (visited[curr] + 1) in bomb_dic[d]) and
+                    (not d in visited)):
                 queue.append(d)
                 visited[d] = visited[curr] + 1
-                free += 1
+                if not d in bomb_dic:
+                    free += 1
 
     return free
 
@@ -127,20 +128,26 @@ def mappping(self):
     # others = [(x,y) for (x,y,n,b,s) in self.game_state['others']]
     coins = self.game_state['coins']
     explosion_map = self.game_state['explosions']
+    bomb_dic = {}
     bomb_map = np.zeros(arena.shape)
 
     # map for bombs
     for (xb, yb, t) in bombs_xys:
+        arena[xb, yb] = 2
+        # when other agent mark arena as well
         for (i, j) in [(xb + h, yb) for h in range(-3, 4)] + [(xb, yb + h) for h in range(-3, 4)]:
-            if (0 < i < bomb_map.shape[0]) and (0 < j < bomb_map.shape[1]) and (arena[(i,j)] != -1):
-                bomb_map[i, j] = max(bomb_map[i, j], t)
+            if (0 < i < arena.shape[0]) and (0 < j < arena.shape[1]) and (arena[(i, j)] != -1):
+                bomb_map[(i, j)] = t
+                if (i, j) in bomb_map:
+                    bomb_dic[(i, j)].append(t)
+                else:
+                    bomb_dic[(i, j)] = [t]
 
-    print(bomb_map)
     # General case
     # state = np.zeros(32, dtype = int)
 
     # Coins case
-    state = np.zeros(13)
+    state = np.zeros(14)
 
     # 0. UP ->    (x  , y-1)
     # 1. DOWN ->  (x  , y+1)
@@ -181,27 +188,34 @@ def mappping(self):
     danger = 0
     if bomb_map[(x, y)] > 0:
         danger = 1
-        print("Primer if",danger)
+        time = bomb_map[(x, y)]
         for i in range(4):
-            time = bomb_map[(x, y)]
             x_next, y_next = directions[i]
-            if arena[(x_next,y_next)] == 0 :
-                free_cells[i] = get_free_cells(self, x_next, y_next, arena, bomb_map, explosion_map, time)
-        print("Segundo if",danger)
+            if arena[(x_next, y_next)] == 0:
+                free_cells[i] = get_free_cells(self, x_next, y_next, arena, bomb_dic, explosion_map, time)
 
+    # Number of crates
 
-    #print(danger)
+    number_crates = 0
+    for (i, j) in [(x + h, y) for h in range(-3, 4)] + [(x, y + h) for h in range(-3, 4)]:
+        if (0 < i < arena.shape[0]) and (0 < j < arena.shape[1]) and (arena[(i, j)] == 1):
+            number_crates += 1
 
-    state[8:9] = danger
-    state[9:] = free_cells
-
-    #print("Aca:  ", state[8])
+    state[8] = danger
+    state[9:13] = free_cells
+    state[13] = number_crates
 
     self.logger.debug(f'STATE VALID: {state[:4]}')
-    self.logger.debug(f'STATE COINS: {state[4:]}')
+    self.logger.debug(f'STATE COINS: {state[4:8]}')
+    self.logger.debug(f'STATE DANGER: {state[8]}')
+    self.logger.debug(f'STATE ESCAPE: {state[9:13]}')
+    self.logger.debug(f'STATE CRATES: {state[13]}')
 
-    #print("Aca:  ",state[8])
-
+    print("STATE VALID:",state[:4])
+    print("STATE COINS:",state[4:8])
+    print("STATE DANGER:",state[8])
+    print("STATE ESCAPE:",state[9:13])
+    print("STATE CRATES",state[13])
     return state
 
 
