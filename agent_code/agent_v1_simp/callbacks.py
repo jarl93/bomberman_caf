@@ -75,7 +75,7 @@ def distance_bfs (self, xa, ya, xo, yo, arena):
     queue  = deque([(xa,ya)])
     visited = {}
     visited[(xa,ya)] = 0
-    dist = -1
+    dist = 10000000
     while (len(queue)>0):
         curr_x, curr_y = queue.popleft()
         
@@ -137,7 +137,7 @@ def get_region_valid (self, xa, ya, xo, yo, valid, arena):
             region_valid = list_valid[idx_valid]
     
     if (np.count_nonzero(region_valid) == 2 ):
-        d_min = 1000000
+        d_min = 2000000
         idx_min = 0
         for i in range (4):
             if region_valid[i] == 1:
@@ -224,8 +224,8 @@ def mappping(self):
     #self.logger.debug(f'Distance coins: {list_dist}')
     if len(list_dist) > 0:
         min_dist = np.min(np.array(list_dist))
-    if len(list_dist) > 0 and min_dist > -1:
-        idx_min = np.argmin(np.array(list_dist))        
+    if len(list_dist) > 0 and min_dist < 10000000:
+        idx_min = np.argmin(np.array(list_dist))
         x_min, y_min = coins[idx_min]
         state[4:8] = get_region_valid(self, x, y, x_min, y_min, valid, arena)
         
