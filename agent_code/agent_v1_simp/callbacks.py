@@ -299,7 +299,7 @@ def get_reward(self):
         self.actions_killed_self += 1
 
     if e.BOMB_DROPPED in self.events:
-        actions_bomb_dropped += 1
+        self.actions_bomb_dropped += 1
         reward += self.reward_list['BOMB_DROPPED']
         self.logger.debug("DROP_BOMB")
     
@@ -417,10 +417,10 @@ def setup(self):
     }
     
     # Number of possible actions
-    # self.num_actions = 6
+    self.num_actions = 6
     
     # Case to just collect the coins
-    self.num_actions = 4
+    # self.num_actions = 4
     
     # action index (this is really the variable used as action)
     self.idx_action = 0
@@ -560,6 +560,7 @@ def setup(self):
     self.actions_bomb_dropped = 0
     self.actions_killed_self = 0
     self.number_crates_destroyed = 0
+    self.actions_dead_zone = 0
 
 
 
@@ -683,6 +684,7 @@ def end_of_episode(self):
     #self.logger.debug(f'A-Simple: {self.actions_taken_simple}')
     self.logger.debug(f'A-Model: {self.actions_taken_model}')
     self.logger.debug(f'A-InvalidModel: {self.actions_taken_model_invalid}')
+    self.logger.debug(f'A-DeadZone: {self.actions_dead_zone}')
     self.logger.debug(f'A-Total: {total_actions}')
     self.logger.debug(f'T-Action: {self.elapsed_time_action/total_actions}')
     self.logger.debug(f'T-TimeEpisodes: {elapsed_time} :s')
@@ -740,3 +742,4 @@ def end_of_episode(self):
     self.actions_bomb_dropped = 0
     self.actions_killed_self = 0
     self.number_crates_destroyed = 0
+    self.actions_dead_zone = 0
