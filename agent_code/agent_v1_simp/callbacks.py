@@ -75,7 +75,7 @@ def distance_bfs (self, xa, ya, xo, yo, arena):
     queue  = deque([(xa,ya)])
     visited = {}
     visited[(xa,ya)] = 0
-    dist = 10000000
+    dist = 1000000
     while (len(queue)>0):
         curr_x, curr_y = queue.popleft()
         
@@ -89,68 +89,6 @@ def distance_bfs (self, xa, ya, xo, yo, arena):
                 queue.append(d)
                 visited[d] = visited[(curr_x, curr_y)] + 1
     return dist
-
-def get_region_valid (self, xa, ya, xo, yo, valid, arena):
-    
-    region = np.array([0,0,0,0])
-    region_valid = np.array([0,0,0,0])
-    directions = [(xa, ya-1), (xa, ya+1), (xa-1, ya), (xa+1, ya)]
-    
-    # upper
-    if (xo == xa and yo < ya):
-        region = np.array([1,0,0,0])
-    # lower
-    if (xo == xa and yo > ya):
-        region = np.array([0,1,0,0])
-    # left
-    if (xo < xa and yo == ya):
-        region = np.array([0,0,1,0])
-    # right
-    if (xo > xa and yo == ya):
-        region = np.array([0,0,0,1])
-    
-    # upper-left
-    if (xo < xa and yo < ya):
-        region = np.array([1,0,1,0])
-    # lower-left
-    if (xo < xa and yo > ya):
-        region = np.array([0,1,1,0])
-    # lower-right
-    if (xo > xa and yo > ya):
-        region = np.array([0,1,0,1])
-    # upper-right
-    if (xo > xa and yo < ya):
-        region = np.array([1,0,0,1])
-    
-    region_valid = valid & region
-    
-    if (np.count_nonzero(region_valid) == 0 ):
-        list_valid = []
-        for bit in range (4):
-            valid_candidate = np.array([0,0,0,0])
-            if valid[bit] == 1:
-                valid_candidate[bit] = 1
-            list_valid.append(valid_candidate)
-        
-        if len(list_valid) > 0:
-            idx_valid = np.random.choice(len(list_valid))
-            region_valid = list_valid[idx_valid]
-    
-    if (np.count_nonzero(region_valid) == 2 ):
-        d_min = 2000000
-        idx_min = 0
-        for i in range (4):
-            if region_valid[i] == 1:
-                x_curr, y_curr = directions[i]
-                d_curr = distance_bfs (self, x_curr, y_curr, xo, yo, arena)
-                if d_curr < d_min:
-                    idx_min = i
-                    d_min = d_curr
-        
-        region_valid = np.array([0,0,0,0])
-        region_valid[idx_min] = 1
-        
-    return region_valid
 
 def mappping(self):
     
@@ -224,10 +162,18 @@ def mappping(self):
     #self.logger.debug(f'Distance coins: {list_dist}')
     if len(list_dist) > 0:
         min_dist = np.min(np.array(list_dist))
-    if len(list_dist) > 0 and min_dist < 10000000:
-        idx_min = np.argmin(np.array(list_dist))
-        x_min, y_min = coins[idx_min]
-        state[4:8] = get_region_valid(self, x, y, x_min, y_min, valid, arena)
+        if min_dist < 1000000:
+            dist_min = 1000000
+            idx_min = np.argmin(np.array(list_dist))
+            x_min, y_min = coins[idx_min]
+            for i in range (4):
+                x_curr, y_curr = directions[i]
+                dist_curr = distance_bfs(self, x_curr, y_curr, x_min, y_min, arena)
+                if dist_curr < dist_min:
+                    dist_curr = dist_min
+                    idx_direction = i
+    
+            state[4+idx_direction] = 1
         
     # Number of crates
 
