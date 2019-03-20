@@ -80,14 +80,16 @@ def distance_bfs (self, xa, ya, xo, yo, arena):
         curr_x, curr_y = queue.popleft()
         
         if (curr_x == xo and curr_y == yo):
-            dist = visited[(curr_x, curr_y)]
+            dist = visited[(curr_x, curr_y)]   
             break
+            
         directions = [(curr_x, curr_y-1), (curr_x, curr_y+1), (curr_x-1, curr_y), (curr_x+1, curr_y)]  
         for (xd, yd) in directions:
             d = (xd, yd)
-            if (arena[d] == 0) and (not d in visited):
+            if (arena[d] == 0 or arena[d] == 2) and (not d in visited):
                 queue.append(d)
                 visited[d] = visited[(curr_x, curr_y)] + 1
+                
     return dist
 
 def mappping(self):
@@ -153,6 +155,7 @@ def mappping(self):
     # 4 bits for nearest coin
     for (xc, yc) in coins:
         #aux_arena[(xc,yc)] = 2
+        arena[(xc,yc)] = 2
         list_dist.append( distance_bfs(self, x, y, xc, yc, arena) )
     
     #aux_arena[x,y] = 5
@@ -162,18 +165,22 @@ def mappping(self):
     #self.logger.debug(f'Distance coins: {list_dist}')
     if len(list_dist) > 0:
         min_dist = np.min(np.array(list_dist))
+        
         if min_dist < 1000000:
             dist_min = 1000000
             idx_min = np.argmin(np.array(list_dist))
             x_min, y_min = coins[idx_min]
+            
             for i in range (4):
                 x_curr, y_curr = directions[i]
-                dist_curr = distance_bfs(self, x_curr, y_curr, x_min, y_min, arena)
-                if dist_curr < dist_min:
-                    dist_curr = dist_min
-                    idx_direction = i
-    
-            state[4+idx_direction] = 1
+                if (arena[(x_curr, y_curr)] == 0):
+                    dist_curr = distance_bfs(self, x_curr, y_curr, x_min, y_min, arena)
+                    if dist_curr < dist_min:
+                        dist_min = dist_curr
+                        idx_direction = i
+            
+            if (dist_min < 1000000):
+                state[4+idx_direction] = 1
         
     # Number of crates
 
