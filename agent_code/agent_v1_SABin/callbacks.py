@@ -406,8 +406,8 @@ def mappping(self):
 
     # Free cells bin version
     if np.count_nonzero(free_cells) > 0:
-         idx_max =np.argmax(free_cells)
-         state[10+idx_max] = 1
+        idx_max =np.argmax(free_cells)
+        state[10+idx_max] = 1
 
     #print("Free cells: ",free_cells)
     # Number of crates
@@ -779,14 +779,14 @@ def act(self):
     ran = np.random.rand()
     if ran <= self.epsilon or len(self.memory) < self.replay_minimum_size:
 
-        if ran < self.epsilon/2:
+        if ran > self.epsilon/10:
             self.logger.info('Picking SIMPLE action')
             self.next_action = SimpleAct(self)
             self.idx_action = self.map_actions[self.next_action]
             self.actions_taken_simple += 1
         else:
             self.logger.info('Picking RANDOM action')
-            idx_random = np.random.choice(6, p=[.18, .18, .18, .18 ,.18, .1])
+            idx_random = np.random.choice(self.num_actions)
             #idx_random = np.random.randint(self.num_actions)
             self.next_action =  self.actions[idx_random]
             self.idx_action = idx_random

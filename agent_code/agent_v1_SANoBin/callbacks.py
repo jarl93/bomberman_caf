@@ -1,7 +1,7 @@
 
 import numpy as np
-import random
 from random import shuffle
+import random
 from time import time, sleep
 from collections import deque
 
@@ -212,65 +212,86 @@ def build_model(self):
     
     return model
 
-def get_distance_coins(self, xa, ya, arena, coins):
-    queue = deque([(xa, ya)])
-    visited = {}
-    visited[(xa, ya)] = 0
-    num_coins = 0
-    dist_path = 0
-    coins_region = []
-
-    # self.logger.debug(f'AGENT:\n {xa, ya}')
-
-    for (xc, yc) in coins:
-        arena[xc, yc] = 2
-        num_coins += 1
-
-    # self.logger.debug(f'REGION:\n {region}')
-    # self.logger.debug(f'ARENA:\n {arena}')
-
-    while (len(queue) > 0) and (len(coins_region) < num_coins):
-
-        curr_x, curr_y = queue.popleft()
-
-        if (arena[(curr_x, curr_y)] == 2):
-            coins_region.append((curr_x, curr_y))
-            dist_path += visited[(curr_x, curr_y)]
-            arena[(curr_x, curr_y)] = 0
-            queue = deque([(curr_x, curr_y)])
-            visited.clear()
-            visited[(curr_x, curr_y)] = 0
-
-        directions = [(curr_x, curr_y - 1), (curr_x, curr_y + 1), (curr_x - 1, curr_y), (curr_x + 1, curr_y)]
-        for (xd, yd) in directions:
-            d = (xd, yd)
-            if (arena[d] == 0 or arena[d] == 2) and (not d in visited):
-                queue.append(d)
-                visited[d] = visited[(curr_x, curr_y)] + 1
-
-    return dist_path
-
-
 def distance_bfs (self, xa, ya, xo, yo, arena):
     queue  = deque([(xa,ya)])
     visited = {}
     visited[(xa,ya)] = 0
-    dist = 1000000
+    dist = -1
     while (len(queue)>0):
         curr_x, curr_y = queue.popleft()
         
         if (curr_x == xo and curr_y == yo):
-            dist = visited[(curr_x, curr_y)]   
+            dist = visited[(curr_x, curr_y)]
             break
-            
         directions = [(curr_x, curr_y-1), (curr_x, curr_y+1), (curr_x-1, curr_y), (curr_x+1, curr_y)]  
         for (xd, yd) in directions:
             d = (xd, yd)
-            if (arena[d] == 0 or arena[d] == 2) and (not d in visited):
+            if (arena[d] == 0) and (not d in visited):
                 queue.append(d)
                 visited[d] = visited[(curr_x, curr_y)] + 1
-                
     return dist
+
+def get_region_valid (self, xa, ya, xo, yo, valid, arena):
+    
+    region = np.array([0,0,0,0])
+    region_valid = np.array([0,0,0,0])
+    directions = [(xa, ya-1), (xa, ya+1), (xa-1, ya), (xa+1, ya)]
+    
+    # upper
+    if (xo == xa and yo < ya):
+        region = np.array([1,0,0,0])
+    # lower
+    if (xo == xa and yo > ya):
+        region = np.array([0,1,0,0])
+    # left
+    if (xo < xa and yo == ya):
+        region = np.array([0,0,1,0])
+    # right
+    if (xo > xa and yo == ya):
+        region = np.array([0,0,0,1])
+    
+    # upper-left
+    if (xo < xa and yo < ya):
+        region = np.array([1,0,1,0])
+    # lower-left
+    if (xo < xa and yo > ya):
+        region = np.array([0,1,1,0])
+    # lower-right
+    if (xo > xa and yo > ya):
+        region = np.array([0,1,0,1])
+    # upper-right
+    if (xo > xa and yo < ya):
+        region = np.array([1,0,0,1])
+    
+    region_valid = valid & region
+    
+    if (np.count_nonzero(region_valid) == 0 ):
+        list_valid = []
+        for bit in range (4):
+            valid_candidate = np.array([0,0,0,0])
+            if valid[bit] == 1:
+                valid_candidate[bit] = 1
+            list_valid.append(valid_candidate)
+        
+        if len(list_valid) > 0:
+            idx_valid = np.random.choice(len(list_valid))
+            region_valid = list_valid[idx_valid]
+    
+    if (np.count_nonzero(region_valid) == 2 ):
+        d_min = 1000000
+        idx_min = 0
+        for i in range (4):
+            if region_valid[i] == 1:
+                x_curr, y_curr = directions[i]
+                d_curr = distance_bfs (self, x_curr, y_curr, xo, yo, arena)
+                if d_curr < d_min:
+                    idx_min = i
+                    d_min = d_curr
+        
+        region_valid = np.array([0,0,0,0])
+        region_valid[idx_min] = 1
+        
+    return region_valid
 
 def get_free_cells (self, xa, ya, arena, bomb_dic, explosion_map, time):
     
@@ -288,7 +309,7 @@ def get_free_cells (self, xa, ya, arena, bomb_dic, explosion_map, time):
         
         for (xd, yd) in directions:
             d = (xd, yd)
-            if ((arena[d] == 0 or arena[d] == 2) and
+            if ((arena[d] == 0) and
                 (explosion_map[curr] <= visited[curr] + 1) and
                 (not d in bomb_dic or not (visited[curr] + 1) in bomb_dic[d]) and
                 (not d in visited)):
@@ -300,145 +321,95 @@ def get_free_cells (self, xa, ya, arena, bomb_dic, explosion_map, time):
     return free
 
 def mappping(self):
-    
     # State definition
-    
+
     # Gather information about the game state
-    arena = np.zeros((s.rows, s.cols))
-    arena[:,:] = self.game_state['arena']
-    #aux_arena = np.zeros((s.rows, s.cols))
-    #aux_arena[:,:] = arena
+    arena = self.game_state['arena']
+    # aux_arena = np.zeros((s.rows, s.cols))
+    # aux_arena[:,:] = arena
     x, y, _, bombs_left, score = self.game_state['self']
     bombs = self.game_state['bombs']
-    bombs_xys = [(x,y,t) for (x,y,t) in bombs]
-    bomb_dic = {}
-    #others = [(x,y) for (x,y,n,b,s) in self.game_state['others']]
+    bombs_xys = [(x, y, t) for (x, y, t) in bombs]
+    # others = [(x,y) for (x,y,n,b,s) in self.game_state['others']]
     coins = self.game_state['coins']
     explosion_map = self.game_state['explosions']
-    
-    #Get optimal distance:
-    if self.game_state['step'] == 1:
-        self.distance_coins_total = get_distance_coins(self, x, y, arena, coins)
-        
-    bomb_map_timer = np.zeros(arena.shape)
-    
-    # dictionary of bombs    
-    for (xb, yb, t) in bombs:
-        # when other agent mark arena as well
-        vec_dir = [(0, -1), (0, 1), (-1, 0), (1, 0)]
-        for v in vec_dir:
-            hx, hy = v
-            for i in range (4):
-                xcoord = xb + hx * i
-                ycoord = yb + hy * i
-                if ((0 < xcoord < arena.shape[0]) and
-                    (0 < ycoord < arena.shape[1]) and
-                    (arena[(xcoord, ycoord)] == 1 or arena[(xcoord, ycoord)] == 0)):
-                    bomb_map_timer[(xcoord, ycoord)] = t
-                    if (xcoord, ycoord) in bomb_dic:
-                        bomb_dic[(xcoord, ycoord)].append(t)
-                    else:
-                        bomb_dic[(xcoord, ycoord)] = [t]
-                else:
-                    break
-   
-    # map of bombs
+    bomb_dic = {}
     bomb_map = np.zeros(arena.shape)
-    
-    for (xb, yb, t) in bombs:            
-        vec_dir = [(0, -1), (0, 1), (-1, 0), (1, 0)]
-        for v in vec_dir:
-            hx, hy = v
-            for i in range(0, 4-t+1):
-                xcoord = xb + hx * i
-                ycoord = yb + hy * i
-                if ((0 < xcoord < arena.shape[0]) and
-                    (0 < ycoord < arena.shape[1]) and
-                    (arena[(xcoord, ycoord)] == 1 or arena[(xcoord, ycoord)] == 0)):
-                    bomb_map[(xcoord, ycoord)] = 1
+
+    # map for bombs
+    for (xb, yb, t) in bombs_xys:
+        arena[xb, yb] = 2
+        # when other agent mark arena as well
+        for (i, j) in [(xb + h, yb) for h in range(-3, 4)] + [(xb, yb + h) for h in range(-3, 4)]:
+            if (0 < i < arena.shape[0]) and (0 < j < arena.shape[1]) and (arena[(i, j)] != -1):
+                bomb_map[(i, j)] = t
+                if (i, j) in bomb_map:
+                    bomb_dic[(i, j)].append(t)
                 else:
-                    break
-    
-    self.dead_zone = bomb_map
-    
+                    bomb_dic[(i, j)] = [t]
+
     # General case
     # state = np.zeros(32, dtype = int)
-    
+
     # Coins case
     state = np.zeros(self.state_size)
-    
+
     # 0. UP ->    (x  , y-1)
     # 1. DOWN ->  (x  , y+1)
     # 2. LEFT ->  (x-1, y  )
     # 3. RIGHT -> (x+1, y  )
-    
+
     # 4 bits for valid position
-    valid = np.array([0,0,0,0])
-    
-    directions = [(x,y-1), (x,y+1), (x-1,y), (x+1,y)]
+    valid = np.array([0, 0, 0, 0])
+
+    directions = [(x, y - 1), (x, y + 1), (x - 1, y), (x + 1, y)]
     for i in range(4):
         d = directions[i]
-        if (arena[d] == 0 and explosion_map[d] <= 1 and bomb_map[d] == 0):
+        if (arena[d] == 0 and explosion_map[d] <= 1):
             valid[i] = 1
-    
+
     state[:4] = valid
-    
-    # bit for bomb
-    state[4] = bombs_left
-    
-    
+
+    #Bomb Avalible?
+    if (bombs_left > 0):
+        state[4] = 1
+
     list_dist = []
     # 4 bits for nearest coin
     for (xc, yc) in coins:
-        #aux_arena[(xc,yc)] = 2
-        arena[(xc,yc)] = 2
-        list_dist.append( distance_bfs(self, x, y, xc, yc, arena) )
-    
-    #aux_arena[x,y] = 5
-    
-    #self.logger.debug(f'ARENA:\n {aux_arena}')
-    
-    #self.logger.debug(f'Distance coins: {list_dist}')
+        # aux_arena[(xc,yc)] = 2
+        list_dist.append(distance_bfs(self, x, y, xc, yc, arena))
+
+    # aux_arena[x,y] = 5
+
+    # self.logger.debug(f'ARENA:\n {aux_arena}')
+
+    # self.logger.debug(f'Distance coins: {list_dist}')
     if len(list_dist) > 0:
         min_dist = np.min(np.array(list_dist))
-        
-        if min_dist < 1000000:
-            dist_min = 1000000
-            idx_min = np.argmin(np.array(list_dist))
-            x_min, y_min = coins[idx_min]
-            
-            for i in range (4):
-                x_curr, y_curr = directions[i]
-                d = directions[i]
-                if ((arena[d] == 0 or arena[d] == 2) and
-                    (explosion_map[d] <= 1) and
-                    (bomb_map[d] == 0)):
-                    dist_curr = distance_bfs(self, x_curr, y_curr, x_min, y_min, arena)
-                    if dist_curr < dist_min:
-                        dist_min = dist_curr
-                        idx_direction = i
-            
-            if (dist_min < 1000000):
-                state[5+idx_direction] = 1
-                
-    # Scape route
-    if (bomb_map_timer[x,y] > 0):
-        free_max = 0
-        for i in range (4):
-            x_curr, y_curr = directions[i]
-            d = directions[i]
-            if ((arena[d] == 0 or arena[d] == 2) and
-                (explosion_map[d] <= 1)):
-                time = bomb_map_timer[x,y]
-                free_curr = get_free_cells(self, x_curr, y_curr, arena, bomb_dic, explosion_map, time)
-                if free_curr > free_max:
-                    free_max = free_curr
-                    idx_direction = i
-        if free_max > 0:
-            state[9+idx_direction] = 1
-    
-    
-        
+    if len(list_dist) > 0 and min_dist > -1:
+        idx_min = np.argmin(np.array(list_dist))
+        x_min, y_min = coins[idx_min]
+        state[5:9] = get_region_valid(self, x, y, x_min, y_min, valid, arena)
+
+    # DANGER
+    free_cells = np.zeros(4)
+    danger = 0
+    if bomb_map[(x, y)] > 0:
+        danger = 1
+        time = bomb_map[(x, y)]
+        for i in range(4):
+            x_next, y_next = directions[i]
+            if arena[(x_next, y_next)] == 0:
+                free_cells[i] = get_free_cells(self, x_next, y_next, arena, bomb_dic, explosion_map, time)
+
+
+    # Free cells bin version
+#     if np.count_nonzero(free_cells) > 0:
+#         idx_max =np.argmax(free_cells)
+#         state[10+idx_max] = 1
+
+    #print("Free cells: ",free_cells)
     # Number of crates
 
     number_crates = 0
@@ -455,17 +426,28 @@ def mappping(self):
                     number_crates += 1
             else:
                 break
-    state[13] = number_crates
-    
-    self.logger.debug(f'STATE VALID: {state[:4]}')
-    self.logger.debug(f'STATE BOMB: {state[4]}')
-    self.logger.debug(f'STATE COINS: {state[5:9]}')
-    self.logger.debug(f'STATE SCAPE: {state[9:13]}')
-    self.logger.debug(f'STATE CRATES: {state[13]}')
-    
+
+    state[9] = danger
+    state[10:14] = free_cells
+    state[14] = number_crates
+
+    self.logger.debug(f'STATE: {state}')
+    #
+    # self.logger.debug(f'STATE VALID: {state[:5]}')
+    # self.logger.debug(f'STATE COINS: {state[5:9]}')
+    # self.logger.debug(f'STATE DANGER: {state[9]}')
+    # self.logger.debug(f'STATE ESCAPE: {state[10:14]}')
+    # self.logger.debug(f'STATE CRATES: {state[14]}')
+
+    # print("STATE VALID: ",state[:5])
+    # print("STATE COINS: ",state[5:9])
+    # print("STATE DANGER: ",state[9])
+    # print("STATE ESCAPE: ",state[10:14])
+    # print("STATE CRATES: ",state[14])
+
 
     return state
-    
+
 def get_reward(self):
     
     self.next_state = mappping(self)
@@ -473,7 +455,7 @@ def get_reward(self):
     x, y, _, bombs_left, score = self.game_state['self']
     
     reward = 0
-                  
+
     # The agent took a invalid action and it should be punished
     if e.INVALID_ACTION in self.events:
         reward += self.reward_list['INVALID_ACTION']
@@ -484,22 +466,22 @@ def get_reward(self):
             self.flag_actions_taken_model = 0
 
         self.logger.debug("INVALID ACTION")
-        
+
     # A coin was found, therefore the agent receives a reward for that
     if e.COIN_COLLECTED in self.events:
         reward += self.reward_list['COIN_COLLECTED']
         self.coins_collected += 1
         self.logger.debug("COIN COLLECTED")
-    #else:      #In case of crates, we dont mind about optimazed path
+    # else:      #In case of crates, we dont mind about optimazed path
     #    reward += self.reward_list['VALID']
 
     # In order to incentevi the optimal number of crates destroyed per Bomb dropped:
     # We give a reward proportional to NCrates*NCrates.
     if e.CRATE_DESTROYED in self.events:
-        NCrates =  list(self.events).count(9)
+        NCrates = list(self.events).count(9)
         self.number_crates_destroyed += NCrates
-        reward += NCrates*NCrates*self.reward_list['CRATE_DESTROYED']
-        self.logger.debug(f'CRATES DESTROYED: {NCrates}')
+        reward += NCrates * NCrates * self.reward_list['CRATE_DESTROYED']
+        self.logger.debug(f'DESTROYED: {NCrates}')
 
     if e.COIN_FOUND in self.events:
         reward += self.reward_list['COIN_FOUND']
@@ -514,14 +496,9 @@ def get_reward(self):
         self.actions_bomb_dropped += 1
         reward += self.reward_list['BOMB_DROPPED']
         self.logger.debug("DROP_BOMB")
-    
-    if self.dead_zone[x,y] > 0:
-        self.actions_dead_zone += 1
-        reward += self.reward_list['DEAD_ZONE']
-    
-    
+
     self.total_reward = reward
-    
+
     self.reward_episode += self.total_reward
     
 def remember(self, state, action, reward, next_state, done):
@@ -545,7 +522,6 @@ def replay(self):
         target_f[0][action] = target
         self.model.fit(np.array([state]), target_f, epochs=1, verbose=0)
     
-    
 def replay_quick(self):
     
     state, action, reward, next_state, done = self.memory [len(self.memory) - 1]
@@ -557,8 +533,7 @@ def replay_quick(self):
     target_f = self.model.predict(state.reshape((1, self.state_size)))
     target_f[0][action] = target
     self.model.fit(state.reshape((1, self.state_size)), target_f, epochs=1, verbose=0)
-    
-    
+
 def update_epsilon (self):
     if self.epsilon > self.epsilon_min:
         self.epsilon -= self.epsilon_decay
@@ -577,7 +552,7 @@ def update_model(self, done):
             replay_quick(self)
     else:
         replay_quick(self)
-    
+
     # Decrease epsilon each time step
     update_epsilon(self)
     
@@ -615,9 +590,6 @@ def setup(self):
     
     self.actions = ['UP', 'DOWN', 'LEFT', 'RIGHT', 'WAIT', 'BOMB']
     
-    # Case to just collect the coins
-    #self.actions = ['UP', 'DOWN', 'LEFT', 'RIGHT']
-    
     #Init map of actions
     self.map_actions = {
         'UP': 0, 
@@ -631,24 +603,19 @@ def setup(self):
     # Number of possible actions
     self.num_actions = 6
     
-    # Case to just collect the coins
-    # self.num_actions = 4
     
     # action index (this is really the variable used as action)
-    self.idx_action = 0
+    self.idx_action = 4
     
     #STATE
     
     # state size
-    self.state_size = 14
+    self.state_size = 15
 
     self.state = np.zeros(self.state_size)
     
     # next_state defined as state
     self.next_state = np.zeros(self.state_size)
-    
-    # dead zone
-    self.dead_zone = np.zeros((s.rows, s.cols))
        
     
     #HYPERPARAMETERS
@@ -669,7 +636,7 @@ def setup(self):
     self.epsilon = 1.0
     
     # Exploration steps
-    self.exploration_steps = 100000
+    self.exploration_steps = 250000
     
     # Minimum value of epsilon, after this value
     # epsilon does not decrease anymore
@@ -697,8 +664,8 @@ def setup(self):
     self.memory = deque(maxlen= self.memory_size)
     
     #MODEL
-    self.model_path = './agent_code/agent_v1_simpSA/model.h5'
-
+    self.model_path = './agent_code/agent_v1_SANoBin/model.h5'
+    
     # NN for training
     self.model = build_model(self)
     
@@ -727,22 +694,18 @@ def setup(self):
             'COIN_COLLECTED' : reward_coin,
             'CRATE_DESTROYED' : reward_crate,
             'INVALID_ACTION': -8,
-            'DEAD_ZONE': -40,
             'VALID' : -2,
             'DIE' : -1500,
-            'COIN_FOUND' :  40,
-            'KILLED_SELF' : -40,
-            'BOMB_DROPPED': 20
+            'COIN_FOUND' :  20,
+            'KILLED_SELF' : -500,
+            'BOMB_DROPPED': 8
     }
-
     # COUNTERS
-    
 
     # Total steps
     self.total_steps = 0
     # Random actions taken
     self.actions_taken_random = 0
-
     # Simple agent actions taken
     self.actions_taken_simple = 0
     # Actions taken based on the model
@@ -751,7 +714,6 @@ def setup(self):
     self.actions_taken_model_invalid = 0
     # Flag, if the action belongs to the model
     self.flag_actions_taken_model = 0
-
 
     # Coins collected
     self.coins_collected = 0
@@ -768,27 +730,25 @@ def setup(self):
     self.elapsed_time_action = 0.0
     self.elapsed_time_model = 0.0
     self.q_mean = 0.0
-    self.distance_coins_total = 0.0
     self.actions_bomb_dropped = 0
     self.actions_killed_self = 0
     self.number_crates_destroyed = 0
-    self.actions_dead_zone = 0
-
-
 
     #Lists
     self.list_reward = []
     self.list_score = np.zeros(10)
     self.list_invalid_actions = []
     self.list_total_actions = []
-    
+
     #Simple agent:
+    self.logger.debug('Successfully entered setup code')
+    np.random.seed()
     # Fixed length FIFO queues to avoid repeating the same actions
     self.bomb_history = deque([], 5)
     self.coordinate_history = deque([], 20)
     # While this timer is positive, agent will not hunt/attack opponents
     self.ignore_others_timer = 0
-    
+
 def act(self):
     """Called each game step to determine the agent's next action.
 
@@ -804,9 +764,6 @@ def act(self):
     """
     
     self.logger.info(f'STATE SIZE: {self.state.shape}')
-    
-    x, y, _, bombs_left, score = self.game_state['self']
-    
     # Gather information about the game state
     self.state = mappping(self)
     
@@ -819,17 +776,18 @@ def act(self):
     #if np.random.rand() <= self.epsilon_play:
     
     #When training use
-    rand = np.random.rand()
-    
-    if rand <= self.epsilon or len(self.memory) < self.replay_minimum_size:
-        if rand < self.epsilon/2 or self.dead_zone[x,y] > 0:
+    ran = np.random.rand()
+    if ran <= self.epsilon or len(self.memory) < self.replay_minimum_size:
+
+        if ran < self.epsilon/2:
             self.logger.info('Picking SIMPLE action')
             self.next_action = SimpleAct(self)
             self.idx_action = self.map_actions[self.next_action]
             self.actions_taken_simple += 1
         else:
             self.logger.info('Picking RANDOM action')
-            idx_random = np.random.randint(self.num_actions)
+            idx_random = np.random.choice(6, p=[.18, .18, .18, .18 ,.18, .1])
+            #idx_random = np.random.randint(self.num_actions)
             self.next_action =  self.actions[idx_random]
             self.idx_action = idx_random
             # Increase the number of random actions that has been taken
@@ -849,7 +807,6 @@ def act(self):
         #time end action
         self.elapsed_time_action += time() - start_time1Act
 
-
 def reward_update(self):
     """Called once per step to allow intermediate rewards based on game events.
 
@@ -863,14 +820,11 @@ def reward_update(self):
     
     # Get the reward based on the events from the previous step
     get_reward(self)
-
-
+    
     # Update the model
     start_time1Model = time()
     update_model(self, False)
     self.elapsed_time_model += time() - start_time1Model
-
-
 
 def end_of_episode(self):
     """Called at the end of each game to hand out final rewards and do training.
@@ -897,7 +851,7 @@ def end_of_episode(self):
         self.start_time2 = time()
         elapsed_time = time() - self.start_time1
 
-    total_actions = self.actions_taken_random + self.actions_taken_model + self.actions_taken_simple
+    total_actions = self.actions_taken_random + self.actions_taken_model
     self.q_mean /= total_actions
     self.reward_total += self.reward_episode
 
@@ -914,51 +868,33 @@ def end_of_episode(self):
     self.logger.debug(f'A-Simple: {self.actions_taken_simple}')
     self.logger.debug(f'A-Model: {self.actions_taken_model}')
     self.logger.debug(f'A-InvalidModel: {self.actions_taken_model_invalid}')
-    self.logger.debug(f'A-DeadZone: {self.actions_dead_zone}')
     self.logger.debug(f'A-Total: {total_actions}')
     self.logger.debug(f'T-Action: {self.elapsed_time_action/total_actions}')
+    self.logger.debug(f'T-Model: {self.elapsed_time_model/(self.actions_taken_model+1)}')
     self.logger.debug(f'T-TimeEpisodes: {elapsed_time} :s')
-    
-    if self.actions_taken_model > 0:
-        self.logger.debug(f'T-Model: {self.elapsed_time_model/(self.actions_taken_model)}')
-    else:
-        self.logger.debug("T-Model: -1")
-        
-    if self.actions_taken_model > 0:
-        self.logger.debug(f'M-Model_Invalid/ModelAct: {(self.actions_taken_model_invalid)/(self.actions_taken_model)}')
-    else:
-        self.logger.debug("M-Model_Invalid/ModelAct: -1")
-        
-    if self.distance_coins_total > 0:
-        self.logger.debug(f'M-Steps/OptimalDistance: {total_actions/self.distance_coins_total}')
-    else:
-        self.logger.debug("M-Steps/OptimalDistance: -1")
-        
-    if self.actions_bomb_dropped > 0:    
-        self.logger.debug(f'M-KilledSelfRate: {self.actions_killed_self / self.actions_bomb_dropped}')
-        self.logger.debug(f'M-Crates/BombsDroped: {self.number_crates_destroyed / self.actions_bomb_dropped}')
-    else:
-        self.logger.debug("M-KilledSelfRate: -1")
-        self.logger.debug("M-Crates/BombsDroped: -1")
-        
+    self.logger.debug(f'M-Model_Invalid/ModelAct: {(self.actions_taken_model_invalid)/(self.actions_taken_model+1)}')
+    self.logger.debug(f'M-KilledSelfRate: {self.actions_killed_self / self.actions_bomb_dropped}')
+    self.logger.debug(f'M-Crates/BombsDroped: {self.number_crates_destroyed / self.actions_bomb_dropped}')
     self.logger.debug(f'QMean: {self.q_mean}')
 
-
-    self.list_reward.append(self.reward_episode)
-    self.list_score [score] += 1
-    self.list_invalid_actions.append(self.actions_invalid)
-    self.list_total_actions.append(total_actions)
     
-    if (self.episodes % 100 == 0):
-        self.logger.debug(f'JARL-List rewards:\n {self.list_reward}')
-        self.logger.debug(f'JARL-List score:\n {self.list_score}')
-        self.logger.debug(f'JARL-List invalid:\n {self.list_invalid_actions}')
-        self.logger.debug(f'JARL-List total:\n {self.list_total_actions}')
-        self.list_reward = []
-        self.list_score = np.zeros (10)
-        self.list_invalid_actions = []
-        self.list_total_actions = []
-
+  
+    
+#     self.list_reward.append(self.reward_episode)
+#     self.list_score [score] += 1
+#     self.list_invalid_actions.append(self.actions_invalid)
+#     self.list_total_actions.append(total_actions)
+    
+#     if (self.episodes % 100 == 0):
+#         self.logger.debug(f'JARL-List rewards:\n {self.list_reward}')
+#         self.logger.debug(f'JARL-List score:\n {self.list_score}')
+#         self.logger.debug(f'JARL-List invalid:\n {self.list_invalid_actions}')
+#         self.logger.debug(f'JARL-List total:\n {self.list_total_actions}')
+#         self.logger.debug("HEY")
+#         self.list_reward = []
+#         self.list_score = np.zeros (10)
+#         self.list_invalid_actions = []
+#         self.list_total_actions = []
 
     # Init counters once an episode has ended
     self.coins_collected = 0
@@ -972,4 +908,4 @@ def end_of_episode(self):
     self.actions_bomb_dropped = 0
     self.actions_killed_self = 0
     self.number_crates_destroyed = 0
-    self.actions_dead_zone = 0
+    

@@ -117,7 +117,7 @@ def mappping(self):
         vec_dir = [(0, -1), (0, 1), (-1, 0), (1, 0)]
         for v in vec_dir:
             hx, hy = v
-            for i in range(0, 4-t):
+            for i in range(0, 4-t+1):
                 xcoord = xb + hx * i
                 ycoord = yb + hy * i
                 if ((0 < xcoord < arena.shape[0]) and
@@ -173,7 +173,7 @@ def mappping(self):
             
             for i in range (4):
                 x_curr, y_curr = directions[i]
-                if (arena[(x_curr, y_curr)] == 0):
+                if (arena[(x_curr, y_curr)] == 0 or arena[(x_curr, y_curr)] == 2 ):
                     dist_curr = distance_bfs(self, x_curr, y_curr, x_min, y_min, arena)
                     if dist_curr < dist_min:
                         dist_min = dist_curr
@@ -240,7 +240,7 @@ def get_reward(self):
         NCrates =  list(self.events).count(9)
         self.number_crates_destroyed += NCrates
         reward += NCrates*NCrates*self.reward_list['CRATE_DESTROYED']
-        self.logger.debug(NCrates ,"DESTROYED")
+        self.logger.debug(f'CRATES DESTROYED: {NCrates}')
 
     if e.COIN_FOUND in self.events:
         reward += self.reward_list['COIN_FOUND']
@@ -410,7 +410,7 @@ def setup(self):
     self.epsilon = 1.0
     
     # Exploration steps
-    self.exploration_steps = 150000
+    self.exploration_steps = 100000
     
     # Minimum value of epsilon, after this value
     # epsilon does not decrease anymore
@@ -471,9 +471,9 @@ def setup(self):
             'DEAD_ZONE': -40,
             'VALID' : -2,
             'DIE' : -1500,
-            'COIN_FOUND' :  20,
-            'KILLED_SELF' : -500,
-            'BOMB_DROPPED': 8
+            'COIN_FOUND' :  40,
+            'KILLED_SELF' : -10,
+            'BOMB_DROPPED': 20
     }
 
     # COUNTERS
@@ -659,7 +659,7 @@ def end_of_episode(self):
         
     if self.actions_bomb_dropped > 0:    
         self.logger.debug(f'M-KilledSelfRate: {self.actions_killed_self / self.actions_bomb_dropped}')
-        self.logger.debug(f'M-Crates/BombsDroped: {self.actions_killed_self / self.actions_bomb_dropped}')
+        self.logger.debug(f'M-Crates/BombsDroped: {self.number_crates_destroyed / self.actions_bomb_dropped}')
     else:
         self.logger.debug("M-KilledSelfRate: -1")
         self.logger.debug("M-Crates/BombsDroped: -1")

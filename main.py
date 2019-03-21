@@ -41,7 +41,7 @@ def main():
 
     # Initialize environment and agents
     world = BombeRLeWorld([
-            ('agent_v1', True)
+            ('agent_v1_simpSA', True)
             #('simple_agent', False),
             #('simple_agent', False),
             #('simple_agent', False)
