@@ -319,6 +319,7 @@ def mappping(self):
     if self.game_state['step'] == 1:
         self.distance_coins_total = get_distance_coins(self, x, y, arena, coins)
         
+    bomb_map_timer = np.zeros(arena.shape)
     
     # dictionary of bombs    
     for (xb, yb, t) in bombs:
@@ -332,6 +333,7 @@ def mappping(self):
             if ((0 < xcoord < arena.shape[0]) and
                 (0 < ycoord < arena.shape[1]) and
                 (arena[(xcoord, ycoord)] == 1 or arena[(xcoord, ycoord)] == 0)):
+                bomb_map_timer[(xcoord, ycoord)] = t
                 if (xcoord, ycoord) in bomb_dic:
                     bomb_dic[(xcoord, ycoord)].append(t)
                 else:
@@ -415,13 +417,14 @@ def mappping(self):
                 state[4+idx_direction] = 1
                 
     # Scape route
-    if (bomb_map[x,y] > 0):
+    if (bomb_map_timer[x,y] > 0):
         for i in range (4):
             x_curr, y_curr = directions[i]
             d = directions[i]
             free_max = 0
             if ((arena[d] == 0 or arena[d] == 2) and
                 (explosion_map[d] <= 1)):
+                time = bomb_map[x,y]
                 free_curr = get_free_cells(self, x_curr, y_curr, arena, bomb_dic, explosion_map, time)
                 if free_curr > free_max:
                     free_max = free_curr
