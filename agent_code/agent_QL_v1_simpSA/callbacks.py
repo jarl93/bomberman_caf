@@ -1,3 +1,5 @@
+#TO ACT
+
 import numpy as np
 from random import shuffle
 from time import time, sleep
@@ -62,8 +64,6 @@ def look_for_targets(free_space, start, targets, logger=None):
     while True:
         if parent_dict[current] == start: return current
         current = parent_dict[current]
-
-
 
 #posibles targets
     # others = [(x,y) for (x,y,n,b,s) in self.game_state['others']]
@@ -211,9 +211,7 @@ def regg_forest_fit(self):
     # print (X_full, y_full)
 
 def predict_Forest(self,state_to_predict):
-    # X_to_predict = self.stateFlat.astype(float).reshape(1, -1)
 
-    # IndexAction = self.VActions[self.next_action]
     if self.flag_forest:
         act_pred = self.regr_rf.predict(state_to_predict.reshape(1, -1))
         #print("Dont exist, and run Regression forrest")
@@ -228,8 +226,49 @@ def predict_Forest(self,state_to_predict):
             act_pred = np.random.rand(self.num_actions) * 0.05
             self.logger.debug(f'Initial guess Q vec with randoms ')
 
-
     return act_pred
+
+
+    # # To perform actions just with Policy
+    # state_str = str(''.join(map(str, state_to_predict)))
+    # if state_str in self.StatesIndex:
+    #     act_pred = self.StatesIndex[state_str]
+    #     print("Exist")
+    #     self.logger.debug(f'We have the state...')
+    #     return act_pred
+    # else:
+    #     act_pred = self.regr_rf.predict(state_to_predict.reshape(1, -1))
+    #     print("Predicting")
+    #     return act_pred
+
+
+def flag_fit_to_bomb(self):
+    # Gather information about the game state
+    arena = self.game_state['arena']
+    x, y, _, bombs_left, score = self.game_state['self']
+    others = [(x, y) for (x, y, n, b, s) in self.game_state['others']]
+    # Compile a list of 'targets' the agent should head towards
+    dead_ends = [(x, y) for x in range(1, 16) for y in range(1, 16) if (arena[x, y] == 0)
+                 and ([arena[x + 1, y], arena[x - 1, y], arena[x, y + 1], arena[x, y - 1]].count(0) == 1)]
+
+    # Take a step towards the most immediately interesting target
+    free_space = arena == 0
+    if self.ignore_others_timer > 0:
+        for o in others:
+            free_space[o] = False
+    d = look_for_targets(free_space, (x,y), dead_ends, self.logger)
+
+    # Add proposal to drop a bomb if at dead end
+    if (x,y) in dead_ends:
+        return 1
+    # Add proposal to drop a bomb if touching an opponent
+    if len(others) > 0:
+        if (min(abs(xy[0] - x) + abs(xy[1] - y) for xy in others)) <= 1:
+            return 1
+    # Add proposal to drop a bomb if arrived at target and touching crate
+    if d == (x,y) and ([arena[x+1,y], arena[x-1,y], arena[x,y+1], arena[x,y-1]].count(1) > 0):
+        return 1
+    return 0
 
 def get_free_cells(self, xa, ya, arena, bomb_dic, explosion_map, time):
     queue = deque([(xa, ya)])
@@ -394,7 +433,7 @@ def mappping(self):
 
     # Scape route
     if (bomb_map_timer[x, y] > 0):
-        free_max = 0
+        free_max = 5
         for i in range(4):
             x_curr, y_curr = directions[i]
             d = directions[i]
@@ -404,10 +443,13 @@ def mappping(self):
                 time = bomb_map_timer[x, y]
                 free_curr = get_free_cells(self, x_curr, y_curr, arena, bomb_dic, explosion_map, time)
                 if free_curr > free_max:
-                    free_max = free_curr
-                    idx_direction = i
-        if free_max > 0:
-            state[9 + idx_direction] = 1
+                    free_curr = free_max
+                    #idx_direction = i
+                state[9 + i] = free_curr
+
+
+        # if free_max > 0:
+        #     state[9 + idx_direction] = 1
 
     # Number of crates
 
@@ -425,8 +467,16 @@ def mappping(self):
                     number_crates += 1
             else:
                 break
-    state[13] = number_crates
 
+    if number_crates < 10:
+        state[13] = number_crates
+    else:
+        state[13] = 9
+
+    # when is next to the crate or opponent (State coins all zeros) activate
+    if not state[5:9].any() and state[4] == 1:
+        state[14] = 1
+    #flag_fit_to_bomb(self)
     # self.logger.debug(f'STATE VALID: {state[:4]}')
     # self.logger.debug(f'STATE BOMB: {state[4]}')
     # self.logger.debug(f'STATE COINS: {state[5:9]}')
@@ -434,10 +484,11 @@ def mappping(self):
     # self.logger.debug(f'STATE CRATES: {state[13]}')
 
     print("STATE VALID: ",state[:4])
-    print("STATE BOMB: ",state[4])
+    print("STATE AVALIBLE BOMB: ",state[4])
     print("STATE COINS: ",state[5:9])
     print("STATE SCAPE: ",state[9:13])
     print("STATE CRATES: ",state[13])
+    print("STATE DROP BOMB: ", state[14], "\n")
 
     return state
 
@@ -469,10 +520,11 @@ def get_reward(self):
 
     # In order to incentevi the optimal number of crates destroyed per Bomb dropped:
     # We give a reward proportional to NCrates*NCrates.
-    if e.CRATE_DESTROYED in self.events:
+    if (e.CRATE_DESTROYED in self.events) and ( not e.KILLED_SELF in self.events):
+        self.logger.debug("SURVIVE BOMB")
         NCrates = list(self.events).count(9)
         self.number_crates_destroyed += NCrates
-        reward += NCrates * NCrates * self.reward_list['CRATE_DESTROYED']
+        reward += NCrates * NCrates * self.reward_list['CRATE_DESTROYED']/2
         self.logger.debug(f'CRATES DESTROYED: {NCrates}')
 
     if e.COIN_FOUND in self.events:
@@ -484,10 +536,10 @@ def get_reward(self):
         self.logger.debug("KILLED_SELF")
         self.actions_killed_self += 1
 
-    if e.BOMB_DROPPED in self.events:
-        self.actions_bomb_dropped += 1
-        reward += self.reward_list['BOMB_DROPPED']
-        self.logger.debug("DROP_BOMB")
+    # if e.BOMB_DROPPED in self.events:
+    #     self.actions_bomb_dropped += 1
+    #     reward += self.reward_list['BOMB_DROPPED']
+    #     self.logger.debug("DROP_BOMB")
 
     if self.dead_zone[x, y] > 0:
         self.actions_dead_zone += 1
@@ -617,7 +669,7 @@ def setup(self):
     # STATE
 
     # state size
-    self.state_size = 14
+    self.state_size = 15
 
     self.state = np.zeros(self.state_size,dtype=int)
 
@@ -687,7 +739,7 @@ def setup(self):
         'COIN_COLLECTED': reward_coin,
         'CRATE_DESTROYED': reward_crate,
         'INVALID_ACTION': -8,
-        'DEAD_ZONE': -40,
+        'DEAD_ZONE': -1,
         'VALID': -2,
         'DIE': -500,
         'COIN_FOUND': 20,
@@ -775,37 +827,43 @@ def act(self):
     self.total_steps += 1
 
     # Exploration
-
-    # When playing use
-    # if np.random.rand() <= self.epsilon_play:
-
-    # When training use
-    # ran = np.random.rand()
-    # if ran <= self.epsilon:
-    #     self.logger.info('Picking RANDOM action')
+    # if self.state[4] == 0 :
+    #     simple_act(self)
+    #     self.logger.info('Picking Simple Agent action')
+    #     self.idx_action = self.map_actions[self.next_action]
+    #     # Increase the number of simple agent actions that has been taken
+    #     self.actions_taken_simple += 1
+    # else:
+    # # When playing use
+    # # if np.random.rand() <= self.epsilon_play:
+    #
+    # # When training use
+    #     ran = np.random.rand()
+    #     if ran <= self.epsilon:
+    #         self.logger.info('Picking RANDOM action')
     #         idx_random = np.random.randint(self.num_actions)
     #         self.next_action = self.actions[idx_random]
     #         self.idx_action = idx_random
     #         # Increase the number of random actions that has been taken
     #         self.actions_taken_random += 1
-    #
-    # #if ran <= 1.0:
-    #     # if ran <= self.epsilon*:
-    #     #     simple_act(self)
-    #     #     self.logger.info('Picking Simple Agent action')
-    #     #     self.idx_action = self.map_actions[self.next_action]
-    #     #     # Increase the number of simple agent actions that has been taken
-    #     #     self.actions_taken_simple += 1
-    #     # else:
-    #     #
-    #     #     self.logger.info('Picking RANDOM action')
-    #     #     idx_random = np.random.randint(self.num_actions)
-    #     #     self.next_action = self.actions[idx_random]
-    #     #     self.idx_action = idx_random
-    #     #     # Increase the number of random actions that has been taken
-    #     #     self.actions_taken_random += 1
-    # Exploitation
-   # else:
+
+        # #if ran <= 1.0:
+        #     # if ran <= self.epsilon*:
+        #     #     simple_act(self)
+        #     #     self.logger.info('Picking Simple Agent action')
+        #     #     self.idx_action = self.map_actions[self.next_action]
+        #     #     # Increase the number of simple agent actions that has been taken
+        #     #     self.actions_taken_simple += 1
+        #     # else:
+        #     #
+        #     #     self.logger.info('Picking RANDOM action')
+        #     #     idx_random = np.random.randint(self.num_actions)
+        #     #     self.next_action = self.actions[idx_random]
+        #     #     self.idx_action = idx_random
+        #     #     # Increase the number of random actions that has been taken
+        #     #     self.actions_taken_random += 1
+        # #Exploitation
+        # else:
     start_time1Act = time()
     self.logger.info('Picking action according to the MODEL')
     q_values = predict_Forest(self,self.state)
@@ -816,7 +874,7 @@ def act(self):
     self.actions_taken_model += 1
     # Flag, if the action belongs to the model
     self.flag_actions_taken_model = 1
-    self.q_mean += np.sum(q_values) / self.num_actions  ##neu
+    #self.q_mean += np.sum(q_values) / self.num_actions  ##neu
     # time end action
     self.elapsed_time_action += time() - start_time1Act
 
@@ -830,7 +888,7 @@ def reward_update(self):
     agent based on these events and your knowledge of the (new) game state. In
     contrast to act, this method has no time limit.
     """
-    self.logger.debug(f'Encountered {len(self.events)} game event(s)')
+    #self.logger.debug(f'Encountered {len(self.events)} game event(s)')
 
     # Get the reward based on the events from the previous step
     get_reward(self)
@@ -848,7 +906,12 @@ def end_of_episode(self):
     game. self.events will contain all events that occured during your agent's
     final step. You should place your actual learning code in this method.
     """
-    self.logger.debug(f'Encountered {len(self.events)} game event(s) in final step')
+   # self.logger.debug(f'Encountered {len(self.events)} game event(s) in final step')
+
+    for StateStr, QVals in list(self.StatesIndex.items()):
+        self.q_mean += np.sum(QVals)/len(QVals)
+
+    self.q_mean /= len(self.StatesIndex)
 
     # Get the reward based on the events from the previous step
     get_reward(self)
@@ -873,6 +936,7 @@ def end_of_episode(self):
     x, y, _, bombs_left, score = self.game_state['self']
 
     # some conventions, P-'Performance' S-'Setings' A-'Action' T-'Time'
+    self.logger.debug('----------------------------------------------')
     self.logger.debug(f'P-Score: {score}')
     self.logger.debug(f'P-Reward acommulated: {self.reward_episode}')
     self.logger.debug(f'P-RewardsTotal: {self.reward_total}')
